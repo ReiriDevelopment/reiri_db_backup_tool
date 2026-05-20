@@ -1,0 +1,69 @@
+name: reiri_db_backup_tool
+description: "The Reiri DB Backup Tool is a Windows desktop app that continuously backs up data from Reiri HVAC controllers to a local database, ensuring critical operational and time-series data is protected from loss by keeping an up-to-date local copy."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^3.1.0
+  riverpod_annotation: ^4.0.0
+
+  reiri_app_core:
+    path: ../reiri_app_core
+  std_widget:
+    path: ../std_widget
+  intl: ^0.20.2
+  flutter_html: ^3.0.0
+  table_calendar: ^3.2.0
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  webview_windows: ^0.4.0
+  path_provider: ^2.1.5
+  sqflite_common_ffi: ^2.3.7+1
+  sqflite_common: ^2.5.4+5
+  file_selector: ^1.0.3
+  window_manager: ^0.4.3
+  tray_manager: ^0.2.3
+  qr_code_scanner_plus: ^2.1.1
+  image_picker: ^1.0.7
+  scan:
+    path: ./lib/scan-1.6.0
+  ftpconnect:
+    path: ./lib/ftpconnect
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/StringTable.json
+    - assets/office_terms_cond.html
+    - assets/images/tray_icon.ico
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/AlibabaSansJP-Regular.ttf
+        - asset: assets/fonts/AlibabaSansTC-55.ttf
+        - asset: assets/fonts/AlibabaPuHuiTi-2-55-Regular.ttf
+        - asset: assets/fonts/AlibabaSansViet-Rg.ttf
+        - asset: assets/fonts/AlibabaSansThai-Rg.ttf

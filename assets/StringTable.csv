@@ -1,0 +1,234 @@
+﻿key-WORD,Note,EN,JP,BR,ES,CH,VN,BAH,THAI,HK,TW
+EN,,English,,,,,,,,,
+JP,,日本語,,,,,,,,,
+CH,,中文(简体字),,,,,,,,,
+TW,,中文(繁體字 台灣),,,,,,,,,
+HK,,中文(繁體字 香港),,,,,,,,,
+BR,,Portugues(Brasil),,,,,,,,,
+ES,,Español,,,,,,,,,
+VN,,Tiếng Việt,,,,,,,,,
+THAI,,ไทย,,,,,,,,,
+BAH,,Bahasa(Indonesia),,,,,,,,,
+# Language selection,,,,,,,,,,,
+sel_lang,,Select a Language,言語選択,Selecione um Idioma,Seleccione un idioma,语言,Hãy chọn ngôn ngữ,Pilih Bahasa,เลือกภาษา,語言選擇,選擇語言
+lang,,Language,表示言語,Língua,Idioma,语言,Tiếng Việt,bahasa,ภาษา,語言,語言
+# Controller selection,,,,,,,,,,,
+ctrl_sel,,Controller Selection,コントローラ選択,,,,,,,,
+ctrl_search,,Search in network,ネットワーク内検索,Busca em rede,Búsqueda en la red,在网络中查询,Tìm kiếm trong mạng,Cari di jaringan,ค้นหาในเครือข่าย,在網絡中搜索,搜尋控制器
+# Login,,,,,,,,,,,
+usrname,,User Name,ユーザ名,Nome do Usuário,Nombre de usuario,用户名,Tên đăng nhập,Nama Pengguna,ชื่อผู้ใช้,使用者名稱,用戶名稱
+passwd,,Password,パスワード,Senha,Contraseña,密码,Mật khẩu,Kata Sandi,รหัส,密碼,密碼
+login,,Login,ログイン,Conectar,Iniciar sesión,登录,Đăng nhập,Masuk,เข้าสู่ระบบ,登錄,登入
+sel_ctrl,,Select a Controller,コントローラーを選択してください,Selecione o controlador,Seleccione controlador,选择控制器,Hãy chọn bộ điều khiển,Silakan pilih pengontrol,โปรดเลือกอุปกรณ์ควบคุม,請選擇控制器,請選擇控制器
+connection_timeout,Reason of could not login,Could not connect to controller,コントローラに接続できません,Não foi possível conectar ao controlador,No se ha podido conectar con el controlador,无法连接到控制器,Không thể kết nối với bộ điều khiển,Tidak bisa terhubung ke pengontrol,ไม่สามารถเชื่อมต่อกับคอนโทรลเลอร์,無法連接到控制器,連接超時
+not_target,Reason of could not login,Could not connect to controller,コントローラに接続できません,Não foi possível conectar ao controlador,No se ha podido conectar con el controlador,无法连接到控制器,Không thể kết nối với bộ điều khiển,Tidak bisa terhubung ke pengontrol,ไม่สามารถเชื่อมต่อกับคอนโทรลเลอร์,無法連接到控制器,無目的
+no_controller,Reason of could not login,Could not connect to controller,コントローラに接続できません,Não foi possível conectar ao controlador,No se ha podido conectar con el controlador,无法连接到控制器,Không thể kết nối với bộ điều khiển,Tidak bisa terhubung ke pengontrol,ไม่สามารถเชื่อมต่อกับคอนโทรลเลอร์,無法連接到控制器,無控制器
+connection_failed,Reason of could not login,Could not connect to controller,コントローラに接続できません,Não foi possível conectar ao controlador,No se ha podido conectar con el controlador,无法连接到控制器,Không thể kết nối với bộ điều khiển,Tidak bisa terhubung ke pengontrol,ไม่สามารถเชื่อมต่อกับคอนโทรลเลอร์,無法連接到控制器,連接失敗
+connection_err,Reason of could not login,Could not connect to controller,コントローラに接続できません,Não foi possível conectar ao controlador,No se ha podido conectar con el controlador,无法连接到控制器,Không thể kết nối với bộ điều khiển,Tidak bisa terhubung ke pengontrol,ไม่สามารถเชื่อมต่อกับคอนโทรลเลอร์,無法連接到控制器,連接錯誤
+wrong_passwd,Login error message.,Password is wrong,パスワードが違います,Senha errada,La contraseña es incorrecta,密码错误,Sai mật khẩu,Kata sandi salah,รหัสไม่ถูกต้อง,密碼錯誤,密碼錯誤
+no_acname,Login error message.,No such user account registered,ユーザが登録されていません,Nenhuma conta de usuário registrada,No hay ninguna cuenta de usuario registrada,此用户不存在,Không có tài khoản người dùng nào được đăng ký,Tidak ada akun pengguna yang terdaftar,ไม่มีบัญชีผู้ใช้ดังกล่าวลงทะเบียน,未註冊此帳戶,無此名稱
+no_passwd,Login error message from SSC,Password is not set for this account,パスワードが設定されていません,A senha não foi definida para esta conta,La contraseña no está establecida para esta cuenta,用户密码未设置,Mật khẩu không cài được cho tài khoản này ,Kata Sandi tidak disetel untuk akun ini,รหัสยังไม่ได้ตั้งให้บัญชีผู้ใช้นี้,未設定密碼,沒有為此帳號設置密碼
+no_auth,error reason if account does not have authority.,No authority,権限がありません,Sem autoridade,Sin autoridad,暂无此权限,Không có thẩm quyền,Tidak ada otoritas,ไม่มีสิทธิ์,無此權限,沒有權限
+logout,,Logout,ログアウト,Desconectar,Cerrar sesión,注销,Thoát đăng nhập,Keluar,ออกจากระบบ,登出,登出
+# Common word,,,,,,,,,,,
+prog_name,,Program Name,プログラム名,,,,,,,,
+disable,,Disable,無効,Desativar,Deshabilitado,启用,Tắt,Nonaktifkan,ยกเลิก,無效,無效
+enable,,Enable,有効,Habilitar,Habilitado,禁用,Mở,Aktifkan,ใช้งาน,有效,有效
+name,,Name,名称,Nome,Nombre,名称,Tên,nama,ชื่อ,名稱,名稱
+save,,Save,保存,Salvar,Guardar,保存,Lưu,simpan,บันทึก,儲存,儲存
+delete,,Delete,削除,Excluir,Borrar,删除,Xóa,hapus,ลบ,刪除,刪除
+refresh,,Refresh,更新,Atualizar,Actualizar,刷新,Làm mới,Refresh,รีเฟรช,刷新,刷新
+cancel,,Cancel,キャンセル,Cancelar,Cancelar,取消,Hủy bỏ,Batal,ยกเลิก,取消,取消
+ok,,OK,OK,OK,De acuerdo,OK,OK,OK,ตกลง,OK,確定
+edit,,Edit,編集,,,,,,,,
+am,,AM,午前,Manhã,AM,上午,Sáng,AM,AM,上午,上午
+pm,,PM,午後,Tarde,PM,下午,Chiều,PM,PM,下午,下午
+day,,Day,日,Dia,Día,日,Ngày,Hari,วัน,日,日
+month,,Month,月,Mês,Mes,月,Tháng,Bulan,เดือน,月,月
+year,,Year,年,Ano,Año,年,Năm,Tahun,ปี,年,年
+date,,Date,日付,Data,Fecha,日期,Ngày,Tanggal,วันที่,日期,日期
+period,,Period,期間,Período,Período,期间,Giai đoạn,Periode,ช่วงเวลา,期間,期間
+duration,,Duration,期間,Duração,Duración,持续时间,Thời lượng,Durasi,ระยะเวลา,持續時間,區間
+month1,,January,1月,Janeiro,Enero,1月,Tháng một,Januari,มกราคม,1月,1月
+month2,,February,2月,Fevereiro,Febrero,2月,Tháng hai,Februari,กุมภาพันธ์,2月,2月
+month3,,March,3月,Março,Marzo,3月,Tháng ba,Maret,มีนาคม,3月,3月
+month4,,April,4月,Abril,Abril,4月,Tháng tư,April,เมษายน,4月,4月
+month5,,May,5月,Maio,Mayo,5月,Tháng năm,Mei,พฤษภาคม,5月,5月
+month6,,June,6月,Junho,Junio,6月,Tháng sáu,Juni,มิถุนายน,6月,6月
+month7,,July,7月,Julho,Julio,7月,Tháng bảy,Juli,กรกฏาคม,7月,7月
+month8,,August,8月,Agosto,Agosto,8月,Tháng tám,Agustus,สิงหาคม,8月,8月
+month9,,September,9月,Setembro,Septiembre,9月,Tháng chín,September,กันยายน,9月,9月
+month10,,October,10月,Outubro,Octubre,10月,Tháng mười,Oktober,ตุลาคม,10月,10月
+month11,,November,11月,Novembro,Noviembre,11月,Tháng mười một,November,พฤศจิกายน,11月,11月
+month12,,December,12月,Dezembro,Diciembre,12月,Tháng mười hai,Desember,ธันวาคม,12月,12月
+mon1,,Jan,1月,Jan,Ene,1月,Tháng 1,Jan,มกราคม,1月,1月
+mon2,,Feb,2月,Fev,Feb,2月,Tháng 2,Feb,กุมภาพันธ์,2月,2月
+mon3,,Mar,3月,Mar,Mar,3月,Tháng 3,Mar,มีนาคม,3月,3月
+mon4,,Apr,4月,Abr,Abr,4月,Tháng 4,Apr,เมษายน,4月,4月
+mon5,,May,5月,Mai,May,5月,Tháng 5,Mei,พฤษภาคม,5月,5月
+mon6,,Jun,6月,Jun,Jun,6月,Tháng 6,Jun,มิถุนายน,6月,6月
+mon7,,Jul,7月,Jul,Jul,7月,Tháng 7,Jul,กรกฎาคม,7月,7月
+mon8,,Aug,8月,Ago,Ago,8月,Tháng 8,Ags,สิงหาคม,8月,8月
+mon9,,Sep,9月,Set,Sep,9月,Tháng 9,Sep,กันยายน,9月,9月
+mon10,,Oct,10月,Out,Oct,10月,Tháng 10,Okt,ตุลาคม,10月,10月
+mon11,,Nov,11月,Nov,Nov,11月,Tháng 11,Nov,พฤศจิกายน,11月,11月
+mon12,,Dec,12月,Dez,Dic,12月,Tháng 12,Des,ธันวาคม,12月,12月
+monday,,Monday,月曜,Segunda-Feira,Lunes,周一,Thứ hai,Senin,วันจันทร์,星期一,星期一
+tuesday,,Tuesday,火曜,Terça-Feira,Martes,周二,Thứ ba,Selasa,วันอังคาร,星期二,星期二
+wednesday,,Wednesday,水曜,Quarta-Feira,Miércoles,周三,Thứ tư,Rabu,วันพุธ,星期三,星期三
+thursday,,Thursday,木曜,Quinta-Feira,Jueves,周四,Thứ năm,Kamis,วันพฤหัสบดี,星期四,星期四
+friday,,Friday,金曜,Sexta-Feira,Viernes,周五,Thứ sáu,Jumat,วันศุกร์,星期五,星期五
+saturday,,Saturday,土曜,Sábado,Sábado,周六,Thứ bảy,Sabtu,วันเสาร์,星期六,星期六
+sunday,,Sunday,日曜,Domingo,Domingo,周日,Chủ Nhật,Minggu,วันอาทิตย์,星期日,星期日
+s_mon,,M,月,S,L,一,T2,S,จ,一,一
+s_tue,,T,火,T,M,二,T3,S,อ,二,二
+s_wed,,W,水,Q,M,三,T4,R,พ,三,三
+s_thu,,Th,木,Q,J,四,T5,K,พฤ,四,四
+s_fri,,F,金,S,V,五,T6,J,ศ,五,五
+s_sat,,S,土,S,S,六,T7,S,ส,六,六
+s_sun,,Su,日,D,D,日,CN,M,อา,日,日
+sel_date,,Date & Time,日付時刻,Data e Hora,Fecha y hora,开始时间,Ngày và Giờ,Tanggal & Waktu,วันที่และเวลา,日期 及 時間,日期 及 時間
+intervals,,Intervals,間隔,Intervalo,Intervalos,间隔,Tần suất,Interval,ช่วงเวลา,間隔,間隔
+days,,days,日,dias,días,天,ngày,hari,วัน,天,天
+hours,,Hours,時間,Horas,Horas,小时,Giờ,Jam,ชั่วโมง,小時,小時
+minutes,,Minutes,分,Minutos,Minutos,分钟,Phút,Menit,นาที,分鐘,分鐘
+select_interval_1hr,,1 Hour,1時間,1 Hora,1 hora,1 小时,1 giờ,1 Jam,1 ชั่วโมง,1 小時,1 小時
+select_interval_30min,,30 min,30分,30 min,30 min,30 分钟,30 phút,30 Menit,30 นาที,30 分鐘,30 分鐘
+select_interval_15min,,15 min,15分,15 min,15 min,15 分钟,15 phút,15 Menit,15 นาที,15 分鐘,15 分鐘
+select_interval_5min,,5 min,5分,5 min,5 min,5 分钟,5 phút,5 Menit,5 นาที,5 分鐘,5 分鐘
+hour_short,,Hr,時間,h,Hr,小时,Giờ,Jam,ชั่วโมง,小時,小時
+min_short,,Min,分,min,Min,分钟,Phút,Menit,นาที,分鐘,分鐘
+dev_name,,Device Name,デバイス名,Nome do dispositivo,Nombre del dispositivo,设备名称,Tến thiết bị  ,Nama Perangkat,ชื่อออุปกรณ์,設備名稱,設備名稱
+close_btn,,Close,閉じる,Fechar,Cerrar,关闭,Đóng,Tutup,ปิด I,關閉,關閉
+today,,Today,当日,Hoje,Hoy,今天,Hôm nay,Hari ini,วันนี้,當日,本日
+this_month,,This Month,今月,Este Mês,Este mes,本月,Tháng này,Bulan ini,เดือนนี้,本月,本月
+this_hour,,This Hour,現在時,Esta Hora,Esta hora,本小时,Giờ này,Jam ini,ชั่วโมงนี้,這個小時,當前時間
+past_24_hr,,Past 24 Hours,過去24時間,Últimas 24 horas,Últimas 24 horas,过去24小时,24 giờ trước,24 Jam Terakhir,24 ชั่วโมงที่ผ่านมา,過去 24 小時,過去24小時
+error,,Error,異常,Erro,Error,异常,Lỗi,Error / Kesalahan,ข้อผิดพลาด,異常,異常
+alert,,Alert,警報,Alerta,Alerta,警报,Cảnh báo,Peringatan,แจ้งเตือน,警報,警報
+# Home,,,,,,,,,,,
+home,,Home,ホーム,Início,Inicio,主页,Nhà,Rumah,บ้าน,主頁,主頁
+# Schedule,,,,,,,,,,,
+schedule,,Schedule,スケジュール,Horário,Horario,日程,Lịch trình,Jadwal,ตาราง,時間表,排程
+# Interlock,,,,,,,,,,,
+interlock,,Interlock,連動制御,Intertravamento,Control logico,智能联锁,Khóa liên động,Interlock,เชื่อมต่อ,聯動功能,連鎖控制
+#Emergency Stop,,,,,,,,,,,
+em_stop,,Emergency Stop,緊急停止,Parada de emergência,Parada de emergencia,紧急停止,Dừng khẩn cấp,Berhenti Darurat,หยุดฉุกเฉิน,緊急停止,緊急停止
+ctrl_targ,,Control Target,制御対象,,,,,,,,
+# Automatic Changeover,,,,,,,,,,,
+change_over,,Automatic Changeover,自動冷暖切替,Mudança Automática,Cambio automático,自动冷暖转换,Tự động thay đổi chế độ làm lạnh/sưởi,Perubahan Otomatis,เปลี่ยนโดยอัตนัติ,自動冷暖切換,自動冷暖切換
+# Scene,,,,,,,,,,,
+scene,,Scene,シーン,Cena,Escena,场景,Hoạt cảnh,Rangkaian Aksi,ซีน,場景,情境
+# Group,,,,,,,,,,,
+group,,Group,グループ,Grupo,Grupo,群组,Nhóm,Kelompok,กลุ่ม,組別,群組
+# Report,,,,,,,,,,,
+report,,Report,報告書,Relatório,Informe,报告,Báo cáo,Laporan,รายงาน,報告,報告
+trend_graph,,Trend Graph,トレンドグラフ,Gráfico de Tendência,Gráfico de tendencias,图表,Đồ thị,Grafik Tren,กราฟ,圖表,圖表
+energy_man,,Energy Management,エネルギー管理,Gerenciamento de energia,Gestión energética,能源管理,Quản lý năng lượng,Manajemen energi,การจัดการพลังงาน,能源管理,能源管理
+water_man,,Water Management,水量管理,Gerenciamento de água,Gestión del agua,水量管理,Quản lý nước,Manajement air,การจัดการน้ำ,水量管理,水量管理
+op_report,,Operation Report,運転情報レポート,Relatório de Operação,Informe de operación,运行报告,Báo cáo hoạt động,Laporan Operasi,การจัดการนำ,運轉報告,運轉歷史紀錄
+err_report,,Error Report,異常レポート,Relatório de Erro,Informe de errores,故障报告,Báo cáo lỗi ,laporan kesalahan,รายงานข้อผิดพลาด,錯誤報告,故障紀錄
+history,,History,履歴,Histórico,Historia,系统操作历史,Lịch sử,Riwayat,ประวัติ,記錄,記錄
+ppd_bill,,Issue Bill,請求書発行,Emitir Conta,Emitir factura,生成账单,Phát hành hóa đơn,Tagihan,การออกใบแจ้งหนี้,發出賬單,帳單發佈
+rt_energy,,Realtime Energy Monitoring,リアルタイムエネルギー監視,,,,,,,,
+lifetime,,Lifetime,トータル,Total,Vida,使用期内,Vòng đời,Umur Hidup,อายุการใช้งาน,生命週期,使用期
+yearly,,Yearly,年次,,,,,,,,
+monthly,,Monthly,月次,,,,,,,,
+daily,,Daily,日次,,,,,,,,
+hourly,,Hourly,毎時,,,,,,,,
+op_time,,Operation Time,運転時間,Tempo de Operação,Tiempo de operación,运行时间,Thời gian hoạt động,Waktu Beroperasi,ระยะเวลาทำงาน,運行時間,運轉時間
+err_code,,Error Type,異常種類,Tipo de Avaria,Tipo de error,故障类型,Loại lỗi,Tipe Kesalahan,ชนิดข้อผิดพลาด,錯誤類別,異常類別
+err_code_freq,,Total number of Errors,異常発生回数,Número total de Avarias,Número total de errores,故障频率,Tổng số các lỗi,Total Jumlah Kesalahan,จำนวนความผิดพลาดทั้งหมด,異常發生總次數,異常發生總次數
+# System settings,,,,,,,,,,,
+sys,,System,システム,Sistema,Sistema,系统,Hệ thống,sistem,ระบบ,系統,系統
+usr_admin,,User Administration,ユーザー管理,Administração de Usuários,Administración de usuarios,用户管理,Người quản trị,Administrasi Pengguna,การจัดการผู้ใช้,使用者管理,用戶管理
+dev_settings,,Device Settings,デバイス設定,Configurações do dispositivo,Configuración del dispositivo,设备管理,Thiết lập thiết bị,Pengaturan alat,ตั้งค่าอุปกรณ์,管理點設定,設備設定
+qr_code_gen,,QR Code,QRコード,Código QR,Código QR,用户二维码生成,Mã QR,kode QR,คิวอาร์โค้ด,二維碼,QR Code
+ipcam_set,,IP Camera Settings,IPカメラ設定,Configurações da câmera IP,Configuración de la leva IP,网络摄像机管理,Thiết lập Camera IP,pengaturan kamera IP,ตั้งค่ากล้องแบบไอพี,網路攝影機設定,網路攝影機設定
+g_home,English only,Google Home,,,,,,,,,
+alexa,English only,Alexa,,,,,,,,,
+ver_info,,Version Information,バージョン情報,informações sobre a versão,Información de versión,版本号,Thông tin phiên bản,Informasi Versi,ข้อมูลของเวอร์ชั่น,版本信息,版本資訊
+term_cond,,Terms and Conditions,利用規約,Termos e Condições,Términos y condiciones,用户协议与隐私条款,Các điều khoản và điều kiện,Syarat dan Ketentuan,ข้อตกลงและเงื่อนไข,合約條款,使用條款
+hotel_set,,Hotel Guest Room Control Settings,ホテル客室制御設定,Configurações de Controle do Quarto de Hóspedes,Configuración de Control de Habitaciones de Hotel,酒店客房控制设置,Cài đặt Điều khiển phòng khách sạn,Pengaturan Kontrol Ruangan Tamu Hotel,การตั้งค่าการควบคุมห้องพักในโรงแรม,飯店客房控制設置,飯店客房控制設置
+hotel_man,,Hotel Guest Room Management,ホテル客室管理,Gerenciamento de quartos de hóspedes,Gestión de habitaciones de hotel,酒店客房管理,Quản lý phòng khách sạn,Manajemen Ruangan Tamu Hotel,การจัดการห้องพักโรงแรม,飯店客房管理,飯店客房管理
+display_setting,,Display Settings,表示設定,,,,,,,,
+# IAQ,,,,,,,,,,,
+iaq_room_set,,IAQ Room Settings,IAQルーム設定,Configurações da sala IAQ,Ajustes de la sala IAQ,空气质量设置,Cài đặt Phòng IAQ,Pengaturan Ruang IAQ,การตั้งค่าห้อง IAQ,IAQ 房間設置,IAQ房間設定
+iaq,,IAQ,,,,,,,,,
+iaq_mon,,IAQ Monitoring,IAQ監視,Monitoramento IAQ,Monitoreo de IAQ ,IAQ監視,Giám sát IAQ,Pemantauan IAQ,การแสดงค่า IAQ,室內空氣質數監測,IAQ監視
+temp,,Temperature,温度,Temperatura,Temperatura,温度,Nhiệt độ,Temperatur,อุณหภูมิ,温度,溫度
+pm25,,PM2.5,,,PM2.5,,PM2.5,,,,
+co2,,CO2,,,Co2,,CO2,,,,
+humi,,Humidity,湿度,Umidade,Humedad,湿度,Độ ẩm,Kelembaban,ความชื้น,濕度,濕度
+tvoc,,TVOC,,,TVOC,,TVOC,,,,
+# Status,,,,,,,,,,,
+comm_err,,Communication Error,通信異常,Erro de comunicação,Error de comunicación,通信错误,Lỗi giao tiếp,Kesalahan Komunikasi,ข้อผิดพลาดในการสื่อสาร,通訊錯誤,通訊錯誤
+on,,On,運転,Ligado,Encendido,开,Bật,Hidup,เปิด,運轉,運轉
+off,,Off,停止,Desligado,Apagado,关,Tắt,Mati,ปิด,停止,停止
+mode,,Mode,運転モード,Modo,Modo,模式,Chế độ,Mode,โหมด,模式,模式
+C,,Cool,冷房,Frio,Frio,制冷,Chế độ làm lạnh ,Dingin,โหมดทำความเย็น,製冷,冷房
+H,,Heat,暖房,Quente,Calor,制热,Chế độ Sưởi,panas,โหมดทำความร้อน,制熱,暖房
+F,,Fan,送風,Ventilação,Ventilador,送风,Chế độ Quạt,kipas,โหมดพัดลม,送風,送風
+D,,Dry,ドライ,Dry,Seco,除湿,Làm khô,kering,โหมดลดความชื้น,除濕,除濕
+A,,Auto,自動,Automático,Automático,自动,Tự động,Otomatis,อัตโนมัติ,自動,自動
+T,,Air conditioning,温調,Ar condicionado,Aire acondicionado,空调,Điều hòa không khí,pendingin ruangan,เครื่องปรับอากาศ,空調,溫度控制
+fanspeed,,Fan Speed,風量,Velocidade do Ventilador,Velocidad del ventilador,风量,Tốc độ quạt,Kecepatan Kipas,แรงลม,風速,風速
+fA,fanspeed,Auto,自動,Automático,Automático,自动,Tự động,Otomatis,อัตโนมัติ,自動,自動
+fQ,fanspeed,Quiet,静か,Quieto,Silencio,安静,Im lặng,Senyap,เงียบ,寧靜,靜音
+fSA,fanspeed,Auto Step,自動,Automático,Automático,自动,Tự động,Otomatis,อัตโนมัติ,自動,自動
+flap,flap,Flap,風向,Direção do Defletor,Aleta,风向,Cánh hướng dòng,Penutup,ทิศทางลม,葉片擺動,葉片擺動
+flap2,flap,Horizontal Flap,風向(水平),Direção do Defletor Horizontal,Solapa horizontal,水平送风,Đảo gió cánh ngang,Penutup horizontal,ทิศทางลมแนวนอน,風向(水平),水平風向
+off_timer,,Off Timer,自動停止,Desligar Temporizador,Temporizador de apagado,定时关闭,Hẹn giờ TẮT,Pengatur waktu mati,ตั้งเวลาปิด,定時關機,自動關機
+off_duration,,Off Duration,停止猶予時間,Desligar Duração,Duracion apagado,关闭延时,Thời gian TẮT,Durasi mati,ช่วงปิด,停止時段,停止期間
+setback_op,,Setback operation,セットバック運転,,,,,,,,
+vmode,VAM,Ventilation Mode,換気モード,Modo de Ventilação,Modo Ventilacion,热交换模式,Chế độ thông gió,Mode Ventilasi,โหมดระบายอากาศ,換氣模式,換氣模式
+vA,VAM,Auto,自動,Automático,Automático,自动,Tự động,Otomatis,อัตโนมัติ,自動,自動
+vHX,VAM,Heat Exchange,熱交換,Trocador de Calor,De intercambio de calor,热交换,Trao đổi nhiệt,Pertukaran Panas,แลกเปลี่ยนความร้อน,熱交換,熱交換
+vS,VAM,Bypass,バイパス,Bypass,Derivación,旁路,Bypass,Bypass,บายพาส,旁通,旁通
+vamount,VAM,Ventilation Amount,換気量,Vazão de Ar,Caudal de Ventilacion,热交换量,Lưu lượng thông gió,jumlah ventilasi,ปริมาณการระบายอากาศ,通風量,通風量
+freshup,VAM,Freshup,フレッシュアップ,Freshup,Refrescar,新鲜空气换风,Gió tươi,Kesegaran,โหมดเติมอากาศเข้า,新鮮空氣換氣,新鮮空氣換氣
+apu_mode,APU,Air Purifier Mode,空気清浄モード,Modo purificador de ar,Modo purificador de aire,空气净化器模式,Chế độ lọc không khí,Mode Pembersih Udara,โหมดเครื่องฟอกอากาศ,空氣清淨機模式,空氣清淨機模式
+MA,APU,Manual Airflow,風量選択,Fluxo de ar manual,Flujo de aire manual,手动气流,Luồng khí thủ công,Aliran Udara Manual,การไหลเวียนอากาศแบบแมนนวล,手動氣流,手動氣流
+AA,APU,Auto Airflow,風量自動,Fluxo de ar automático,Flujo de aire automático,自动气流,Luồng khí tự động,Aliran Udara Otomatis,ระบบไหลเวียนอากาศอัตโนมัติ,自動氣流,自動氣流
+ECO,APU,ECONO,エコ,,,,,,,,
+PET,APU,Pet,ペット,Bicho de estimação,Mascota,宠物,Thú cưng,Peliharaan,สัตว์เลี้ยง,寵物,寵物
+CRC,APU,Circulator,サーキュレータ,Circulador,Circulador,循环器,Máy tuần hoàn,Sirkulator,เครื่องหมุนเวียน,循環器,循環器
+"# Device, Group name",,,,,,,,,,,
+ac,,Air-conditioning,空調,Ar Condicionado,Aire acondicionado,空调,Hệ thống điều hòa không khí,pendingin ruangan,เครื่องปรับอากาศ,空調,溫度調節
+hrv,,Ventilation,換気,Ventilação,Ventilación,换气,Thông gió,ventilasi,การระบายอากาศ,通風,通風
+# PPD setting,,,,,,,,,,,
+ppd_set,,PPD Settings,PPD設定,Configurações PPD,Configuración de PPD,PPD设定,Cài đặt tính điện năng tiêu thụ,Pengaturan PPD,การตั้งค่า PPD,PPD設定,PPD設定
+# Controller setting,,,,,,,,,,,
+ctrl_setting,,Controller Settings,コントローラ設定,Configurações do Controlador,Configuración del Controlador,控制器设置,Thiết lập bộ điều khiển,Pengaturan Kontroler,การตั้งค่าอุปกรณ์ควบคุม,控制器設置,控制器設置
+cloud_conn,,Cloud Connection,クラウド接続,Conexão em Nuvem,Conexión en la Nube,云连接,Kết nối đám mây,Koneksi Cloud,การเชื่อมต่อ Cloud,雲端連結,雲端連結
+temp_unit,,Temperature Unit,温度単位,Unidade de Temperatura,Unidad de Temperatura,温度单位,Đơn vị đo nhiệt độ,Unit Suhu,หน่วยอุณหภูมิ,溫度單位,溫度單位
+netwrk_set,,Network Settings,ネットワーク設定,Configurações de Rede,Configuración de la Red,网络设置,Cài đặt mạng,Pengaturan Jaringan,การตั้งค่าเครือข่าย,網路設置,網路設置
+email_svr_set,,Email Server Settings,Emailサーバー設定,Configurações do Servidor de E-mail,Configuración del Servidor de Correo Electrónico,邮件服务器设置,Cài đặt máy chủ Email,Pengaturan Server Email,การตั้งค่า Email Server,郵件服務器設置,郵件服務器設置
+# Display setting,,,,,,,,,,,
+24_hour_form,,Time Format(24hour),時刻フォーマット(24時間),Formato de Hora (24 horas),formato horario,时间格式（24 小时）,Định dạng thời gian (24 giờ),Format Waktu (24 Jam),รูปแบบของเวลา (24ชั่วโมง),時間格式 ( 24 小時),時間格式
+# Energy management,,,,,,,,,,,
+e_ratio,,Energy Consumption Ratio,消費エネルギー比,,,,,,,,
+# Error information,,,,,,,,,,,
+rt_ulim,,Room Temperature Upper Limit,室温上限値,Limite superior da temperatura ambiente,Límite superior de temperatura ambiente,室温上限,Giới hạn nhiệt độ phía trên,Batas Atas Temperatur Ruangan,จำกัดอุณหภูมิห้องสูงสุด,室內溫度上限,溫度上限值
+rt_llim,,Room Temperature Lower Limit,室温下限値,Limite inferior da temperatura ambiente,Límite inferior de temperatura ambiente,室温下限,Giới hạn nhiệt độ phía dưới,Batas Bawah Temperatur Ruangan,จำกัดอุณหภูมิห้องต่ำสุด,室內溫度下限,溫度下限值
+llim,,Lower limit,下限値,Limite inferior,Límite inferior,下限值,Giới hạn dưới,Batas Bawah,ค่าต่ำสุด,下限值,下限值
+ulim,,Upper limit,上限値,Limite superior,Límite superior,上限值,Giới hạn trên,Batas atas,ค่าสูงสุด,上限值,上限值
+# Order expression,,,,,,,,,,,
+fst,,1st,第1,1ª,1.er,第一个,đầu tiên,ke-1,ที่ 1,第一個,第一個
+snd,,2nd,第2,2ª,2.º,第二个,thứ hai,ke-2,ที่ 2,第二個,第二個
+trd,,3rd,第3,3ª,3.er,第三个,thứ ba,ke-3,ที่ 3,第三個,第三個
+fth,,4th,第4,4ª,4.º,第四个,thứ tư,ke-4,ที่ 4,第四個,第四個
+lst,,Last,最終,Última,Último,最后一个,cuối cùng,terakhir,สุดท้าย,最後一個,最後一個
+# No translation required,,,,,,,,,,,
+fL,fanspeed,L,,,,,,,,,
+fLM,fanspeed,LM,,,,,,,,,
+fM,fanspeed,M,,,,,,,,,
+fMH,fanspeed,MH,,,,,,,,,
+fH,fanspeed,H,,,,,,,,,
+fAL,DAS Duct fan mode,Auto L,,,,,,,,,
+fAM,DAS Duct fan mode,Auto M,,,,,,,,,
+fAH,DAS Duct fan mode,Auto H,,,,,,,,,
+fAS,fanspeed,Airside,,,,,,,,,
+hL,humidity level,L,,,,,,,,,
+hM,humidity level,M,,,,,,,,,
+hH,humidity level,H,,,,,,,,,
