@@ -5,7 +5,9 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
+import 'package:reiri_db_backup_tool/lib/db_latest_probe.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
+import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 
 class InitialBackupFtpView extends StatefulWidget {
   const InitialBackupFtpView({
@@ -17,7 +19,11 @@ class InitialBackupFtpView extends StatefulWidget {
 
   final String controllerIp;
   final String macaddr;
-  final Future<void> Function(String methodValue, String backupPath) onCompleted;
+  final Future<void> Function(
+    String methodValue,
+    String backupPath, {
+    List<GapRange> initialGaps,
+  }) onCompleted;
 
   @override
   State<InitialBackupFtpView> createState() => _InitialBackupFtpViewState();
@@ -116,7 +122,24 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
       ftp = null;
 
       if (!mounted) return;
-      await widget.onCompleted('ftp', _backupPath!);
+
+      // Boundary-timing safeguard: an FTP download takes seconds, during which
+      // the controller may have crossed a 5/15-min write boundary (or written
+      // the new row after the file's SQLite page was already streamed). Probe
+      // the just-downloaded copy and seed any per-file gap so HomeScreen's
+      // recovery flow fetches the missing record(s) into TEMP, then merges.
+      final probe = await probeSourceFolder(
+        sourceFolder: dbDir.path,
+        dbFiles: kInitialBackupDbFiles,
+        now: DateTime.now(),
+      );
+      final initialGaps = probeResultsToGaps(probe, now: DateTime.now());
+
+      await widget.onCompleted(
+        'ftp',
+        _backupPath!,
+        initialGaps: initialGaps,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -4,8 +4,8 @@ const List<String> kInitialBackupDbFiles = [
   'history.db',
   'meter.db',
   'optime.db',
-  'ppd.db',
   'trend.db',
+  'ppd.db',
 ];
 
 const String kInitialBackupDbFolderName = 'DB';

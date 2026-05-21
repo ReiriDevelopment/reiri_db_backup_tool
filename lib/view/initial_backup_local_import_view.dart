@@ -4,7 +4,9 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import 'package:reiri_app_core/reiri_app_core.dart';
+import 'package:reiri_db_backup_tool/lib/db_latest_probe.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
+import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 
 class InitialBackupLocalImportView extends StatefulWidget {
   const InitialBackupLocalImportView({
@@ -14,7 +16,11 @@ class InitialBackupLocalImportView extends StatefulWidget {
   });
 
   final String controllerMac;
-  final Future<void> Function(String methodValue, String backupPath) onCompleted;
+  final Future<void> Function(
+    String methodValue,
+    String backupPath, {
+    List<GapRange> initialGaps,
+  }) onCompleted;
 
   @override
   State<InitialBackupLocalImportView> createState() =>
@@ -27,17 +33,23 @@ class _InitialBackupLocalImportViewState
   String? _backupPath;
 
   bool _isImporting = false;
+  bool _isScanning = false;
   bool _scanDone = false;
-  final Map<String, bool> _scanResult = {};
+
+  /// Per-file probe result: existence + latest record + missing-data flag.
+  /// Used both for the UI (file present?) and to silently seed
+  /// `backup_metadata.detectedGaps` so the gap-fill flow kicks in on connect.
+  final Map<String, DbProbeResult> _scanResult = {};
 
   double _progress01 = 0;
 
   bool get _canImport {
-    if (_isImporting) return false;
+    if (_isImporting || _isScanning) return false;
     if (_sourcePath == null || _sourcePath!.isEmpty) return false;
     if (_backupPath == null || _backupPath!.isEmpty) return false;
     if (!_scanDone) return false;
-    return _scanResult.isNotEmpty && _scanResult.values.every((v) => v);
+    return _scanResult.isNotEmpty &&
+        _scanResult.values.every((r) => r.exists);
   }
 
   String get _localDbRootPath => Directory.current.path;
@@ -67,17 +79,24 @@ class _InitialBackupLocalImportViewState
     final src = _sourcePath;
     if (src == null || src.isEmpty) return;
 
-    final result = <String, bool>{};
-    for (final fname in kInitialBackupDbFiles) {
-      final f = File('${src}\\$fname');
-      result[fname] = f.existsSync();
-    }
+    setState(() {
+      _isScanning = true;
+      _scanDone = false;
+    });
 
+    final probe = await probeSourceFolder(
+      sourceFolder: src,
+      dbFiles: kInitialBackupDbFiles,
+      now: DateTime.now(),
+    );
+
+    if (!mounted) return;
     setState(() {
       _scanResult
         ..clear()
-        ..addAll(result);
+        ..addAll(probe);
       _scanDone = true;
+      _isScanning = false;
     });
   }
 
@@ -102,12 +121,6 @@ class _InitialBackupLocalImportViewState
     final dest = Directory(destDbDir);
     dest.createSync(recursive: true);
 
-    final srcDir = Directory(sourceDbDir);
-    final srcDirEntries = srcDir.listSync();
-    if (srcDirEntries.isEmpty) {
-      // still proceed; copy will just be skipped due to file existence checks
-    }
-
     // Only clear destination when it's the user-selected staging directory.
     if (clearDest) {
       _clearLocalDirectory(dest);
@@ -117,10 +130,10 @@ class _InitialBackupLocalImportViewState
     var done = 0;
 
     for (final fname in kInitialBackupDbFiles) {
-      final srcFile = File('${sourceDbDir}\\$fname');
+      final srcFile = File('$sourceDbDir\\$fname');
       if (!srcFile.existsSync()) continue;
 
-      final dstFile = File('${destDbDir}\\$fname');
+      final dstFile = File('$destDbDir\\$fname');
       await dstFile.create(recursive: true);
       await dstFile.writeAsBytes(await srcFile.readAsBytes());
 
@@ -139,7 +152,7 @@ class _InitialBackupLocalImportViewState
     final backupRoot = _backupPath!;
     // Sanitize MAC again inline to avoid any stale hot-reload/import caching issues.
     final safeMac = widget.controllerMac.replaceAll(':', '_');
-    final controllerDir = Directory('${backupRoot}\\$safeMac');
+    final controllerDir = Directory('$backupRoot\\$safeMac');
     final stagingDir = Directory('${controllerDir.path}\\DB');
     final localRoot = Directory(_localDbRootPath);
 
@@ -164,7 +177,21 @@ class _InitialBackupLocalImportViewState
         clearDest: false,
       );
 
-      await widget.onCompleted('local', _backupPath!);
+      // 3) Re-probe the staged copy right before navigating so boundaries
+      //    that crossed during the copy itself (e.g. user clicked Import at
+      //    14:14:30 and the copy finished at 14:15:10) are captured too.
+      final finalProbe = await probeSourceFolder(
+        sourceFolder: stagingDir.path,
+        dbFiles: kInitialBackupDbFiles,
+        now: DateTime.now(),
+      );
+      final initialGaps = probeResultsToGaps(finalProbe, now: DateTime.now());
+
+      await widget.onCompleted(
+        'local',
+        _backupPath!,
+        initialGaps: initialGaps,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -178,13 +205,14 @@ class _InitialBackupLocalImportViewState
     }
   }
 
-  Widget _buildScanRow(String fileName, bool exists) {
+  Widget _buildScanRow(String fileName, DbProbeResult r) {
+    final exists = r.exists;
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: Icon(exists ? Icons.check_circle : Icons.cancel,
           color: exists ? Colors.green : Colors.red),
-      title: Text(fileName, style: TextStyle(fontSize: 13.5)),
+      title: Text(fileName, style: const TextStyle(fontSize: 13.5)),
       trailing: Text(exists ? 'OK' : 'Missing',
           style: TextStyle(
             fontSize: 12,
@@ -198,6 +226,18 @@ class _InitialBackupLocalImportViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Builder(builder: (context) {
+          final cs = Theme.of(context).colorScheme;
+          return Text(
+            'history.db  •  meter.db  •  optime.db  •  trend.db  •  ppd.db',
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12,
+              color: cs.onSurfaceVariant,
+            ),
+          );
+        }),
+        const SizedBox(height: 12),
         Row(
           children: [
             ElevatedButton.icon(
@@ -238,30 +278,35 @@ class _InitialBackupLocalImportViewState
           ),
         const SizedBox(height: 12),
 
+        if (_isScanning)
+          Row(
+            children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Scanning DB files…',
+                style: TextStyle(color: app.color.inactive, fontSize: 12.5),
+              ),
+            ],
+          ),
+
         if (_sourcePath != null && _scanDone) ...[
-          Text(
-            'Scan Result:',
+          const Text(
+            'Scan Result',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           SizedBox(
             height: 220,
             child: ListView(
-              children: _scanResult.entries
-                  .map((e) => _buildScanRow(e.key, e.value))
-                  .toList(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            _scanResult.values.every((v) => v)
-                ? 'All required DB files exist. Import is enabled.'
-                : 'Some DB files are missing. Import is disabled.',
-            style: TextStyle(
-              color: _scanResult.values.every((v) => v)
-                  ? Colors.green
-                  : app.color.alert,
-              fontSize: 12.5,
+              children: kInitialBackupDbFiles.map((fname) {
+                final r = _scanResult[fname] ?? const DbProbeResult.missing();
+                return _buildScanRow(fname, r);
+              }).toList(),
             ),
           ),
         ],
@@ -296,4 +341,3 @@ class _InitialBackupLocalImportViewState
     );
   }
 }
-

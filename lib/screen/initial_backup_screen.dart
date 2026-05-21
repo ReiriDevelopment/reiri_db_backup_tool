@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
+import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/provider/backup_log_provider.dart';
 import 'package:reiri_db_backup_tool/service/backup_metadata_service.dart';
 import 'package:reiri_db_backup_tool/view/initial_backup_ftp_view.dart';
@@ -160,7 +161,11 @@ class InitialBackupScreen extends ReiriScreen {
     required String safeMac,
     required String controllerIp,
   }) {
-    Future<void> onCompleted(String method, String backupPath) async {
+    Future<void> onCompleted(
+      String method,
+      String backupPath, {
+      List<GapRange> initialGaps = const [],
+    }) async {
       try {
         await markInitialBackupDone(macaddr!, method);
         await storeBackupRootPath(macaddr, backupPath);
@@ -168,11 +173,24 @@ class InitialBackupScreen extends ReiriScreen {
       // Stamp the FTP/import completion time as "disconnected at" so that gap
       // detection in HomeScreen._init() can catch any controller writes that
       // occur between the snapshot and real-time backup starting.
+      //
+      // When the import view detected per-file missing data (interval
+      // boundaries crossed since the imported snapshot's latest record), seed
+      // those ranges into backup_metadata.detectedGaps so RecoveryService
+      // routes real-time → TEMP DB on first connect and schedules gap-fill.
       try {
         final safeMac = macToSafeFolderName(macaddr!);
         final metaService = BackupMetadataService();
         await metaService.init('$backupPath\\$safeMac');
         await metaService.recordDisconnect();
+        if (initialGaps.isNotEmpty) {
+          final seeded = metaService.current.copyWith(
+            detectedGaps: initialGaps,
+            backupState: BackupState.realtimeTemp,
+            flushStatus: FlushStatus.pending,
+          );
+          await metaService.save(seeded);
+        }
       } catch (_) {}
       await BackupLogNotifier.clearEntries(macaddr!);
       if (!context.mounted) return;
@@ -261,7 +279,7 @@ class InitialBackupScreen extends ReiriScreen {
               Text(
                 isFtp
                     ? 'Download DB files from the controller at $controllerIp'
-                    : 'Select the folder containing the SQLite DB files to import.',
+                    : 'Select the controller\'s "DB" folder containing the SQLite DB files to import.',
                 style: TextStyle(fontSize: 12, color: app.color.inactive),
               ),
             ],

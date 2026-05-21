@@ -156,9 +156,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (stored != null) {
         // Init file logger before recovery service so all recovery events land
         // in the log from the very first line.
-        FileLogService().init(stored);
-        // Init recovery service first (may redirect app.db to TEMP on resume).
         final safeMac = macToSafeFolderName(_currentMac);
+        FileLogService().init(stored, safeMac: safeMac);
+        // Init recovery service first (may redirect app.db to TEMP on resume).
         await _recoveryService.init(rootPath: stored, safeMac: safeMac);
         ref.read(recoveryProvider.notifier).attach(_recoveryService);
 
@@ -354,11 +354,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await storeBackupRootPath(_currentMac, path);
     }
     setState(() => _backupRootPath = path);
-    FileLogService().init(path);
+    final safeMac =
+        _currentMac.isEmpty ? '' : macToSafeFolderName(_currentMac);
+    FileLogService().init(path, safeMac: safeMac);
 
     // Init recovery service for the newly selected path.
     if (_currentMac.isNotEmpty) {
-      final safeMac = macToSafeFolderName(_currentMac);
       await _recoveryService.init(rootPath: path, safeMac: safeMac);
       ref.read(recoveryProvider.notifier).attach(_recoveryService);
     }
