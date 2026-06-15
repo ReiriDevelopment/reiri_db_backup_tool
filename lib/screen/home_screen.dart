@@ -833,7 +833,7 @@ class _NoBkPathBanner extends StatelessWidget {
             ).copyWith(
               mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
             ),
-            child: const Text('Go to Settings →',
+            child: const Text('Go to Settings',
                 style: TextStyle(fontSize: 12)),
           ),
         ],
@@ -1010,32 +1010,38 @@ class _TableRow extends StatelessWidget {
     final Color badgeBorder;
     final Color badgeText;
     final String badgeLabel;
+    IconData? badgeIcon;
 
     if (isNotFound) {
       badgeBg = cs.surfaceContainerHigh;
       badgeBorder = cs.outlineVariant;
       badgeText = cs.onSurfaceVariant;
-      badgeLabel = '— Not found';
+      badgeLabel = 'Not found';
+      badgeIcon = null;
     } else if (isDelayed) {
       badgeBg = Colors.orange.shade50;
       badgeBorder = Colors.orange.shade200;
       badgeText = Colors.orange.shade700;
-      badgeLabel = '⚠ Delayed';
+      badgeLabel = 'Delayed';
+      badgeIcon = Icons.warning_amber_rounded;
     } else if (db.status == _SyncStatus.missingDisconnected) {
       badgeBg = Colors.red.shade50;
       badgeBorder = Colors.red.shade200;
       badgeText = Colors.red.shade700;
-      badgeLabel = '✕ Not synced';
+      badgeLabel = 'Not synced';
+      badgeIcon = Icons.close_rounded;
     } else if (db.status == _SyncStatus.missingScheduled) {
       badgeBg = Colors.blue.shade50;
       badgeBorder = Colors.blue.shade200;
       badgeText = Colors.blue.shade700;
-      badgeLabel = '↻ Scheduled to sync';
+      badgeLabel = 'Scheduled to sync';
+      badgeIcon = Icons.sync_rounded;
     } else {
       badgeBg = Colors.green.shade50;
       badgeBorder = Colors.green.shade200;
       badgeText = Colors.green.shade700;
-      badgeLabel = '✓ Synced';
+      badgeLabel = 'Synced';
+      badgeIcon = Icons.check_rounded;
     }
 
     return Container(
@@ -1090,11 +1096,20 @@ class _TableRow extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: badgeBorder),
                 ),
-                child: Text(badgeLabel,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: badgeText,
-                        fontWeight: FontWeight.w500)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (badgeIcon != null) ...[
+                      Icon(badgeIcon, size: 11, color: badgeText),
+                      const SizedBox(width: 3),
+                    ],
+                    Text(badgeLabel,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: badgeText,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1148,7 +1163,7 @@ class _RealtimeBackupCard extends StatelessWidget {
                     color: isActive ? Colors.green : cs.outlineVariant),
                 const SizedBox(width: 8),
                 Text(
-                  isActive ? 'Active' : 'Waiting for connection…',
+                  isActive ? 'Active' : 'Waiting for connection',
                   style: TextStyle(
                       color: isActive
                           ? Colors.green

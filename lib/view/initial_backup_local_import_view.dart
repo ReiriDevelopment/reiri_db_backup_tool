@@ -20,7 +20,8 @@ class InitialBackupLocalImportView extends StatefulWidget {
     String methodValue,
     String backupPath, {
     List<GapRange> initialGaps,
-  }) onCompleted;
+  })
+  onCompleted;
 
   @override
   State<InitialBackupLocalImportView> createState() =>
@@ -48,8 +49,7 @@ class _InitialBackupLocalImportViewState
     if (_sourcePath == null || _sourcePath!.isEmpty) return false;
     if (_backupPath == null || _backupPath!.isEmpty) return false;
     if (!_scanDone) return false;
-    return _scanResult.isNotEmpty &&
-        _scanResult.values.every((r) => r.exists);
+    return _scanResult.isNotEmpty && _scanResult.values.every((r) => r.exists);
   }
 
   String get _localDbRootPath => Directory.current.path;
@@ -187,16 +187,12 @@ class _InitialBackupLocalImportViewState
       );
       final initialGaps = probeResultsToGaps(finalProbe, now: DateTime.now());
 
-      await widget.onCompleted(
-        'local',
-        _backupPath!,
-        initialGaps: initialGaps,
-      );
+      await widget.onCompleted('local', _backupPath!, initialGaps: initialGaps);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Import failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
     } finally {
       if (!mounted) return;
       setState(() {
@@ -210,14 +206,18 @@ class _InitialBackupLocalImportViewState
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
-      leading: Icon(exists ? Icons.check_circle : Icons.cancel,
-          color: exists ? Colors.green : Colors.red),
+      leading: Icon(
+        exists ? Icons.check_circle : Icons.cancel,
+        color: exists ? Colors.green : Colors.red,
+      ),
       title: Text(fileName, style: const TextStyle(fontSize: 13.5)),
-      trailing: Text(exists ? 'OK' : 'Missing',
-          style: TextStyle(
-            fontSize: 12,
-            color: exists ? app.color.inactive : app.color.alert,
-          )),
+      trailing: Text(
+        exists ? 'OK' : 'Missing',
+        style: TextStyle(
+          fontSize: 12,
+          color: exists ? app.color.inactive : app.color.alert,
+        ),
+      ),
     );
   }
 
@@ -226,17 +226,19 @@ class _InitialBackupLocalImportViewState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Builder(builder: (context) {
-          final cs = Theme.of(context).colorScheme;
-          return Text(
-            'history.db  •  meter.db  •  optime.db  •  trend.db  •  ppd.db',
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: cs.onSurfaceVariant,
-            ),
-          );
-        }),
+        Builder(
+          builder: (context) {
+            final cs = Theme.of(context).colorScheme;
+            return Text(
+              'history.db  •  meter.db  •  optime.db  •  trend.db  •  ppd.db',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+              ),
+            );
+          },
+        ),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -288,7 +290,7 @@ class _InitialBackupLocalImportViewState
               ),
               const SizedBox(width: 8),
               Text(
-                'Scanning DB files…',
+                'Scanning DB files' + '...',
                 style: TextStyle(color: app.color.inactive, fontSize: 12.5),
               ),
             ],
@@ -320,10 +322,11 @@ class _InitialBackupLocalImportViewState
             icon: const Icon(Icons.file_upload_rounded),
             label: const Text('Import'),
             style: ElevatedButton.styleFrom().copyWith(
-              mouseCursor: WidgetStateProperty.resolveWith((s) =>
-                  s.contains(WidgetState.disabled)
-                      ? SystemMouseCursors.basic
-                      : SystemMouseCursors.click),
+              mouseCursor: WidgetStateProperty.resolveWith(
+                (s) => s.contains(WidgetState.disabled)
+                    ? SystemMouseCursors.basic
+                    : SystemMouseCursors.click,
+              ),
             ),
           ),
         ),

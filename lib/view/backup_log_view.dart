@@ -234,7 +234,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                                         style: const ButtonStyle(
                                           mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
                                         ),
-                                        child: const Text('Load More ↓'),
+                                        child: const Text('Load More'),
                                       ),
                                     ),
                                   );

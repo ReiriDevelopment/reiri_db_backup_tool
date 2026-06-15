@@ -39,7 +39,10 @@ class RecoveryView extends ConsumerWidget {
                       const SizedBox(height: 3),
                       Text(
                         'Detect and recover missing record periods from the controller',
-                        style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -49,18 +52,21 @@ class RecoveryView extends ConsumerWidget {
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (_) => const GapFillTestScreen()),
+                      builder: (_) => const GapFillTestScreen(),
+                    ),
                   ),
                   icon: const Icon(Icons.science_outlined, size: 15),
                   label: const Text('Test Gap Fill'),
-                  style: OutlinedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: Colors.purple.shade600,
-                    side: BorderSide(color: Colors.purple.shade300),
-                  ).copyWith(
-                    mouseCursor: const WidgetStatePropertyAll(
-                        SystemMouseCursors.click),
-                  ),
+                  style:
+                      OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: Colors.purple.shade600,
+                        side: BorderSide(color: Colors.purple.shade300),
+                      ).copyWith(
+                        mouseCursor: const WidgetStatePropertyAll(
+                          SystemMouseCursors.click,
+                        ),
+                      ),
                 ),
                 const SizedBox(width: 8),
                 _ScanButton(state: state),
@@ -105,21 +111,27 @@ class _ScanButton extends ConsumerWidget {
           : () => ref.read(recoveryProvider.notifier).scanForGaps(),
       icon: state.isScanning
           ? const SizedBox(
-              width: 14, height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
             )
           : const Icon(Icons.search_rounded, size: 16),
-      label: Text(state.isScanning ? 'Scanning…' : 'Scan for Gaps'),
-      style: FilledButton.styleFrom(
-        backgroundColor: const Color(0xFF0BAEC7),
-        foregroundColor: Colors.white,
-        visualDensity: VisualDensity.compact,
-      ).copyWith(
-        mouseCursor: WidgetStateProperty.resolveWith((s) =>
-            s.contains(WidgetState.disabled)
-                ? SystemMouseCursors.basic
-                : SystemMouseCursors.click),
-      ),
+      label: Text(state.isScanning ? 'Scanning' + '...' : 'Scan for Gaps'),
+      style:
+          FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF0BAEC7),
+            foregroundColor: Colors.white,
+            visualDensity: VisualDensity.compact,
+          ).copyWith(
+            mouseCursor: WidgetStateProperty.resolveWith(
+              (s) => s.contains(WidgetState.disabled)
+                  ? SystemMouseCursors.basic
+                  : SystemMouseCursors.click,
+            ),
+          ),
     );
   }
 }
@@ -144,18 +156,24 @@ class _TempDbBanner extends StatelessWidget {
         children: [
           isFlushing
               ? SizedBox(
-                  width: 16, height: 16,
+                  width: 16,
+                  height: 16,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.orange.shade700),
+                    strokeWidth: 2,
+                    color: Colors.orange.shade700,
+                  ),
                 )
-              : Icon(Icons.sync_rounded, size: 16, color: Colors.orange.shade700),
+              : Icon(
+                  Icons.sync_rounded,
+                  size: 16,
+                  color: Colors.orange.shade700,
+                ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               isFlushing
-                  ? 'Merging recovered data into main database…'
-                  : 'Real-time backup is writing to a temporary database. '
-                    'Missing records will be recovered during off-peak hours.',
+                  ? 'Applying recovered records'
+                  : 'Recovering missed records in the background.',
               style: TextStyle(fontSize: 13, color: Colors.orange.shade800),
             ),
           ),
@@ -164,14 +182,20 @@ class _TempDbBanner extends StatelessWidget {
             TextButton(
               onPressed: () =>
                   ref.read(recoveryProvider.notifier).runFlushNow(),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                visualDensity: VisualDensity.compact,
-                foregroundColor: Colors.orange.shade800,
-              ).copyWith(
-                mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
-              ),
-              child: const Text('Run Now →', style: TextStyle(fontSize: 12)),
+              style:
+                  TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    foregroundColor: Colors.orange.shade800,
+                  ).copyWith(
+                    mouseCursor: const WidgetStatePropertyAll(
+                      SystemMouseCursors.click,
+                    ),
+                  ),
+              child: const Text('Run Now', style: TextStyle(fontSize: 12)),
             ),
         ],
       ),
@@ -202,10 +226,8 @@ class _GapTable extends StatelessWidget {
           Expanded(
             child: ListView.builder(
               itemCount: gaps.length,
-              itemBuilder: (_, i) => _GapRow(
-                gap: gaps[i],
-                scheduledAt: scheduledAt,
-              ),
+              itemBuilder: (_, i) =>
+                  _GapRow(gap: gaps[i], scheduledAt: scheduledAt),
             ),
           ),
         ],
@@ -228,7 +250,10 @@ class _GapTableHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(flex: 22, child: Text('DATABASE', style: style)),
-          Expanded(flex: 38, child: Text('MISSING RECORD PERIOD', style: style)),
+          Expanded(
+            flex: 38,
+            child: Text('MISSING RECORD PERIOD', style: style),
+          ),
           Expanded(flex: 16, child: Text('DURATION', style: style)),
           Expanded(
             flex: 24,
@@ -283,9 +308,10 @@ class _GapRow extends StatelessWidget {
             child: Text(
               gap.dbFile,
               style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500),
+                fontFamily: 'monospace',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           Expanded(
@@ -307,9 +333,10 @@ class _GapRow extends StatelessWidget {
               child: Text(
                 durationLabel,
                 style: TextStyle(
-                    fontSize: 12,
-                    color: chipColor,
-                    fontWeight: FontWeight.w600),
+                  fontSize: 12,
+                  color: chipColor,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -318,9 +345,10 @@ class _GapRow extends StatelessWidget {
             child: Text(
               scheduleLabel,
               style: TextStyle(
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                  color: cs.onSurfaceVariant),
+                fontSize: 13,
+                fontFamily: 'monospace',
+                color: cs.onSurfaceVariant,
+              ),
               textAlign: TextAlign.end,
             ),
           ),
@@ -353,9 +381,10 @@ class _EmptyState extends StatelessWidget {
           Text(
             isMain ? 'No missing data detected' : 'No gaps found',
             style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: cs.onSurface),
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -383,15 +412,26 @@ String _fmtDate(DateTime dt) {
 
 String _fmtScheduled(DateTime dt) {
   final now = DateTime.now();
-  final isTonight = dt.day == now.day &&
-      dt.month == now.month &&
-      dt.year == now.year;
+  final isTonight =
+      dt.day == now.day && dt.month == now.month && dt.year == now.year;
   final h = dt.hour.toString().padLeft(2, '0');
   final m = dt.minute.toString().padLeft(2, '0');
-  return isTonight ? 'Tonight $h:$m' : '${_kMonths[dt.month - 1]} ${dt.day} $h:$m';
+  return isTonight
+      ? 'Tonight $h:$m'
+      : '${_kMonths[dt.month - 1]} ${dt.day} $h:$m';
 }
 
 const _kMonths = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];

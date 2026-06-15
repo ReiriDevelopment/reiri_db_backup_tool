@@ -102,6 +102,10 @@ class _AppState extends ConsumerState<App> with WindowListener {
         ),
         actions: [
           TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
               await windowManager.hide();
@@ -113,7 +117,9 @@ class _AppState extends ConsumerState<App> with WindowListener {
                 backgroundColor: Colors.red.shade600),
             onPressed: () async {
               Navigator.pop(ctx);
+              TrayService.instance.dispose();
               await windowManager.destroy();
+              exit(0);
             },
             child: const Text('Close Anyway'),
           ),

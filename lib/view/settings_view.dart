@@ -129,7 +129,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                     const SizedBox(height: 3),
                                     Text(
                                       widget.backupRootPath ??
-                                          'Not configured — tap Browse to set',
+                                          'Not configured. Tap Browse to set.',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontFamily: 'monospace',
