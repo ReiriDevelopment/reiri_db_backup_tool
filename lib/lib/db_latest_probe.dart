@@ -133,13 +133,16 @@ Future<Map<String, DbProbeResult>> probeSourceFolder({
     final interval = kDbWriteIntervals[fname];
     bool missed = false;
     if (interval != null && fname != 'history.db') {
-      // The controller writes a record stamped T at wall clock T+interval
-      // (e.g. the 18:15-stamped record is produced at 18:30, containing the
-      // 18:15–18:30 window). So a record is only "missed" once the wall clock
-      // passes the next stamp PLUS one full interval.
+      // A record stamped T is written by the controller at (or very shortly
+      // after) T — both instantaneous-reading DBs (trend) and accumulated DBs
+      // (meter/optime/ppd, where T is the END of the [T-interval, T] window)
+      // are available as soon as the clock passes T.  A previous version added
+      // one extra interval as a buffer, but that made the probe blind to any
+      // record written in that window (e.g. trend stamped 17:35, FTP downloaded
+      // trend.db at 17:34, probe ran at 17:35:12 → 17:35+5=17:40 > 17:35:12
+      // → not flagged → data permanently lost).
       final nextRecordStamp = _nextBoundary(latest, interval.inMinutes);
-      final nextRecordWriteAt = nextRecordStamp.add(interval);
-      missed = nextRecordWriteAt.isBefore(tNow);
+      missed = nextRecordStamp.isBefore(tNow);
     }
     results[fname] = DbProbeResult(
       exists: true,

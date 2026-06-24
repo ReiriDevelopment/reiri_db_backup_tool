@@ -84,6 +84,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   final _recoveryService = RecoveryService();
 
+  /// Guards against running gap detection twice at once. Both [_init] (when the
+  /// controller is already connected at mount) and the [connectionProvider]
+  /// listener call [_runGapDetection]; without this flag they can race and
+  /// drive two concurrent TEMP-staging cycles on the same DB handles.
+  bool _gapDetectionRunning = false;
+
+  /// Runs reconnect gap detection exactly once at a time and surfaces any gaps
+  /// to the recovery provider. [RecoveryService] also serializes internally,
+  /// but this avoids even queueing a redundant second pass.
+  Future<void> _runGapDetection() async {
+    if (_gapDetectionRunning) return;
+    if (_backupRootPath == null) return;
+    _gapDetectionRunning = true;
+    try {
+      await _recoveryService.onConnected();
+      final allGaps = _recoveryService.metadata.detectedGaps;
+      if (allGaps.isNotEmpty) {
+        FileLogService().log(
+            '[Recovery] *** ${allGaps.length} gap(s) scheduled (including carry-over) ***');
+        for (final g in allGaps) {
+          FileLogService().log(
+              '[Recovery]   ${g.dbFile}: ${g.start} → ${g.end} (${g.duration.inMinutes}min)');
+        }
+        if (mounted) ref.read(recoveryProvider.notifier).onGapsDetected(allGaps);
+        if (mounted) await _loadDbStats();
+      } else {
+        FileLogService().log('[Recovery] No gaps — real-time → MAIN DB');
+      }
+    } finally {
+      _gapDetectionRunning = false;
+    }
+  }
+
   void _tryStartRealtimeBackup() {
     if (!_localBackupDbReady) return;
     final connection = ref.read(connectionProvider);
@@ -160,6 +193,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         FileLogService().init(stored, safeMac: safeMac);
         // Init recovery service first (may redirect app.db to TEMP on resume).
         await _recoveryService.init(rootPath: stored, safeMac: safeMac);
+        // Seed the notifier's cached recovery time before attaching so
+        // _syncFromService() computes scheduledAt with the correct time.
+        final recovTime = await loadRecoveryTime();
+        ref.read(recoveryProvider.notifier).setRecoveryTime(
+            recovTime.hour, recovTime.minute);
         ref.read(recoveryProvider.notifier).attach(_recoveryService);
 
         // If a previous session left us mid-flush, DB is already on MAIN after
@@ -176,17 +214,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final connection = ref.read(connectionProvider);
       if (connection != null && connection['state'] == 'ready' && _backupRootPath != null) {
         FileLogService().log('[Connection] Already connected on startup — running gap detection');
-        await _recoveryService.onConnected();
-        final allGaps = _recoveryService.metadata.detectedGaps;
-        if (allGaps.isNotEmpty) {
-          FileLogService().log('[Recovery] *** ${allGaps.length} gap(s) scheduled (including carry-over) ***');
-          for (final g in allGaps) {
-            FileLogService().log('[Recovery]   ${g.dbFile}: ${g.start} → ${g.end} (${g.duration.inMinutes}min)');
-          }
-          ref.read(recoveryProvider.notifier).onGapsDetected(allGaps);
-        } else {
-          FileLogService().log('[Recovery] No gaps — real-time → MAIN DB');
-        }
+        await _runGapDetection();
       }
 
       _tryStartRealtimeBackup();
@@ -350,12 +378,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _setBackupPath(String path) async {
+    final safeMac = _currentMac.isEmpty ? '' : macToSafeFolderName(_currentMac);
+
+    // Offer to migrate existing data when the path actually changes.
+    if (_backupRootPath != null &&
+        _backupRootPath != path &&
+        _currentMac.isNotEmpty) {
+      final oldMacDir = Directory('$_backupRootPath\\$safeMac');
+      if (await oldMacDir.exists() && mounted) {
+        final move = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Move Backup Data?'),
+            content: Text(
+              'Existing backup data was found at:\n$_backupRootPath\n\n'
+              'Move it to the new location so backup can continue from where it left off?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('No, start fresh'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Move Data'),
+              ),
+            ],
+          ),
+        );
+        if (move == true) {
+          await _migrateBackupData(_backupRootPath!, path, safeMac);
+        }
+      }
+    }
+
     if (_currentMac.isNotEmpty) {
       await storeBackupRootPath(_currentMac, path);
     }
     setState(() => _backupRootPath = path);
-    final safeMac =
-        _currentMac.isEmpty ? '' : macToSafeFolderName(_currentMac);
     FileLogService().init(path, safeMac: safeMac);
 
     // Init recovery service for the newly selected path.
@@ -369,6 +429,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _localBackupDbReady = true;
     await _loadDbStats();
     if (mounted) _tryStartRealtimeBackup();
+  }
+
+  /// Copies the per-controller folder from [oldRoot] to [newRoot] so the user
+  /// can continue backing up to the new location without losing history.
+  Future<void> _migrateBackupData(
+      String oldRoot, String newRoot, String safeMac) async {
+    final src = Directory('$oldRoot\\$safeMac');
+    if (!await src.exists()) return;
+    final dst = Directory('$newRoot\\$safeMac');
+    if (!await dst.exists()) await dst.create(recursive: true);
+    await _copyDirRecursive(src, dst);
+    FileLogService().log('[Migrate] Copied backup data from $oldRoot to $newRoot');
+  }
+
+  Future<void> _copyDirRecursive(Directory src, Directory dst) async {
+    await for (final entity in src.list()) {
+      final name = entity.path.contains('\\')
+          ? entity.path.split('\\').last
+          : entity.path.split('/').last;
+      if (entity is File) {
+        await entity.copy('${dst.path}\\$name');
+      } else if (entity is Directory) {
+        final subDst = Directory('${dst.path}\\$name');
+        if (!await subDst.exists()) await subDst.create();
+        await _copyDirRecursive(entity, subDst);
+      }
+    }
   }
 
   void _showLogoutDialog(BuildContext context) {
@@ -426,20 +513,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (ready) {
         FileLogService().log('[Connection] Reconnected to controller');
         // Detect gaps from the previous disconnect period (reconnect while running).
-        if (_backupRootPath != null) {
-          await _recoveryService.onConnected();
-          final allGaps = _recoveryService.metadata.detectedGaps;
-          if (allGaps.isNotEmpty) {
-            FileLogService().log('[Recovery] *** ${allGaps.length} gap(s) scheduled (including carry-over) ***');
-            for (final g in allGaps) {
-              FileLogService().log('[Recovery]   ${g.dbFile}: ${g.start} → ${g.end} (${g.duration.inMinutes}min)');
-            }
-            ref.read(recoveryProvider.notifier).onGapsDetected(allGaps);
-            if (mounted) await _loadDbStats();
-          } else {
-            FileLogService().log('[Recovery] No gaps — real-time → MAIN DB');
-          }
-        }
+        await _runGapDetection();
         _tryStartRealtimeBackup();
       } else if (_realtimeStarted) {
         _realtimeStarted = false;
@@ -457,17 +531,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           !next.isFlushing &&
           next.backupState == BackupState.realtimeMain) {
         await _loadDbStats();
-        final now = DateTime.now();
-        final entries = _kDbDescriptions
-            .map((d) => BackupLogEntry(
-                  timestamp: now,
-                  backedUpAt: now,
-                  type: BackupLogType.recovery,
-                  result: BackupLogResult.success,
-                  database: d.filename,
-                ))
-            .toList();
-        ref.read(backupLogProvider.notifier).addEntries(entries);
       }
     });
 
@@ -533,7 +596,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       case _NavItem.recovery:
         return const RecoveryView();
       case _NavItem.backupLog:
-        return BackupLogView(macAddr: _currentMac);
+        return BackupLogView(
+          macAddr: _currentMac,
+          backupPath: _backupRootPath != null && _currentMac.isNotEmpty
+              ? '$_backupRootPath\\${macToSafeFolderName(_currentMac)}'
+              : null,
+        );
       case _NavItem.settings:
         return SettingsView(
           backupRootPath: _backupRootPath,
@@ -580,94 +648,98 @@ class _Sidebar extends ConsumerWidget {
                 Brightness.dark);
     final hasMissingData = ref.watch(recoveryProvider).hasGaps;
 
-    return Container(
+    return SizedBox(
       width: 170,
-      decoration: BoxDecoration(
+      child: Material(
         color: cs.surface,
-        border: Border(right: BorderSide(color: cs.outlineVariant)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: 'Reiri ',
-                    style: TextStyle(
-                        color: cs.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(right: BorderSide(color: cs.outlineVariant)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
+                child: RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Reiri ',
+                        style: TextStyle(
+                            color: cs.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18),
+                      ),
+                      TextSpan(
+                        text: 'Backup',
+                        style: TextStyle(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18),
+                      ),
+                    ],
                   ),
-                  TextSpan(
-                    text: 'Backup',
-                    style: TextStyle(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18),
-                  ),
-                ],
+                ),
               ),
-            ),
+              _NavTile(
+                icon: Icons.dashboard_outlined,
+                label: 'Dashboard',
+                item: _NavItem.dashboard,
+                selected: selected,
+                onTap: onSelect,
+              ),
+              _NavTile(
+                icon: Icons.restore_rounded,
+                label: 'Recovery',
+                item: _NavItem.recovery,
+                selected: selected,
+                onTap: onSelect,
+                showDot: hasMissingData,
+              ),
+              _NavTile(
+                icon: Icons.article_outlined,
+                label: 'Backup Log',
+                item: _NavItem.backupLog,
+                selected: selected,
+                onTap: onSelect,
+              ),
+              _NavTile(
+                icon: Icons.settings_outlined,
+                label: 'Settings',
+                item: _NavItem.settings,
+                selected: selected,
+                onTap: onSelect,
+              ),
+              const Spacer(),
+              ListTile(
+                dense: true,
+                minLeadingWidth: 20,
+                leading: Icon(
+                  isDark
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
+                  size: 18,
+                ),
+                title: Text(
+                  isDark ? 'Light Mode' : 'Dark Mode',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                onTap: () {
+                  ref
+                      .read(stringDataProvider('theme_mode').notifier)
+                      .set(isDark ? 'light' : 'dark');
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
+                child: Text('v1.0.0',
+                    style: TextStyle(
+                        fontSize: 11, color: cs.outlineVariant)),
+              ),
+            ],
           ),
-          _NavTile(
-            icon: Icons.dashboard_outlined,
-            label: 'Dashboard',
-            item: _NavItem.dashboard,
-            selected: selected,
-            onTap: onSelect,
-          ),
-          _NavTile(
-            icon: Icons.restore_rounded,
-            label: 'Recovery',
-            item: _NavItem.recovery,
-            selected: selected,
-            onTap: onSelect,
-            showDot: hasMissingData,
-          ),
-          _NavTile(
-            icon: Icons.article_outlined,
-            label: 'Backup Log',
-            item: _NavItem.backupLog,
-            selected: selected,
-            onTap: onSelect,
-          ),
-          _NavTile(
-            icon: Icons.settings_outlined,
-            label: 'Settings',
-            item: _NavItem.settings,
-            selected: selected,
-            onTap: onSelect,
-          ),
-          const Spacer(),
-          ListTile(
-            dense: true,
-            minLeadingWidth: 20,
-            leading: Icon(
-              isDark
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
-              size: 18,
-            ),
-            title: Text(
-              isDark ? 'Light Mode' : 'Dark Mode',
-              style: const TextStyle(fontSize: 13),
-            ),
-            onTap: () {
-              ref
-                  .read(stringDataProvider('theme_mode').notifier)
-                  .set(isDark ? 'light' : 'dark');
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
-            child: Text('v1.0.0',
-                style: TextStyle(
-                    fontSize: 11, color: cs.outlineVariant)),
-          ),
-        ],
+        ),
       ),
     );
   }

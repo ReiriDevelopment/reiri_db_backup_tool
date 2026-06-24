@@ -9,10 +9,11 @@ class BackupLogEntry {
     required this.result,
     required this.database,
     this.backedUpAt,
+    this.details,
   });
 
   /// When the controller wrote the data (file mod time for real-time;
-  /// same as [backedUpAt] for recovery since we have no per-record timestamps).
+  /// earliest record date from the controller response for recovery).
   final DateTime timestamp;
 
   /// When the app detected and saved the backup event.
@@ -23,12 +24,18 @@ class BackupLogEntry {
   final BackupLogResult result;
   final String database;
 
+  /// JSON-encoded raw records received from the controller (recovery only).
+  /// Each element is the list the controller returned for that DB type,
+  /// e.g. `[[202606221615,"id",0.12],[...],...]`. Null for real-time entries.
+  final String? details;
+
   Map<String, dynamic> toJson() => {
         'timestamp': timestamp.toIso8601String(),
         'backedUpAt': backedUpAt?.toIso8601String(),
         'type': type.name,
         'result': result.name,
         'database': database,
+        if (details != null) 'details': details,
       };
 
   factory BackupLogEntry.fromJson(Map<String, dynamic> json) => BackupLogEntry(
@@ -45,5 +52,6 @@ class BackupLogEntry {
           orElse: () => BackupLogResult.success,
         ),
         database: json['database'] as String? ?? '',
+        details: json['details'] as String?,
       );
 }

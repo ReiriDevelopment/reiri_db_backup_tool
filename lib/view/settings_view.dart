@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
+import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
+import 'package:reiri_db_backup_tool/provider/recovery_provider.dart';
+
 class SettingsView extends ConsumerStatefulWidget {
   final String? backupRootPath;
   final Future<void> Function(String path) onPathChanged;
@@ -22,8 +25,9 @@ class SettingsView extends ConsumerStatefulWidget {
 }
 
 class _SettingsViewState extends ConsumerState<SettingsView> {
-  bool _launchOnStartup = false;
+  bool? _launchOnStartup;   // null = still loading from registry
   bool _autoLogin = false;
+  ({int hour, int minute})? _recoveryTime;  // null = still loading from disk
 
   static const _regValueName = 'ReiriBackup';
   static const _regKey =
@@ -34,6 +38,12 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     super.initState();
     _autoLogin = app.autoLogin;
     _checkStartupRegistry();
+    _loadRecoveryTime();
+  }
+
+  Future<void> _loadRecoveryTime() async {
+    final t = await loadRecoveryTime();
+    if (mounted) setState(() => _recoveryTime = (hour: t.hour, minute: t.minute));
   }
 
   Future<void> _checkStartupRegistry() async {
@@ -56,6 +66,19 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       ]);
     }
     await _checkStartupRegistry();
+  }
+
+  Future<void> _pickRecoveryTime(BuildContext context) async {
+    final current = _recoveryTime ?? kDefaultRecoveryTime;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current.hour, minute: current.minute),
+      helpText: 'Recovery Schedule Time',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _recoveryTime = (hour: picked.hour, minute: picked.minute));
+    await storeRecoveryTime(picked.hour, picked.minute);
+    ref.read(recoveryProvider.notifier).updateRecoveryTime(picked.hour, picked.minute);
   }
 
   Future<void> _pickPath() async {
@@ -220,10 +243,20 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     _SettingsTile(
                       title: 'Launch on Windows Startup',
                       subtitle: 'Start the app automatically when Windows boots',
-                      trailing: Switch(
-                        value: _launchOnStartup,
-                        onChanged: _setLaunchOnStartup,
-                      ),
+                      trailing: _launchOnStartup == null
+                          ? const SizedBox(
+                              width: 51, height: 31,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            )
+                          : Switch(
+                              value: _launchOnStartup!,
+                              onChanged: _setLaunchOnStartup,
+                            ),
                     ),
                     _SettingsDivider(),
                     // ── Auto-login on Startup ────────────────────────────────
@@ -236,6 +269,31 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                           await app.setAutoLogin(val);
                           if (mounted) setState(() => _autoLogin = val);
                         },
+                      ),
+                    ),
+                    _SettingsDivider(),
+                    // ── Recovery Schedule Time ───────────────────────────────
+                    _SettingsTile(
+                      title: 'Recovery Schedule Time',
+                      subtitle: 'Daily time to merge gap recovery data into backup',
+                      trailing: OutlinedButton(
+                        onPressed: _recoveryTime == null
+                            ? null
+                            : () => _pickRecoveryTime(context),
+                        style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact).copyWith(
+                          mouseCursor: WidgetStateProperty.resolveWith((s) =>
+                              s.contains(WidgetState.disabled)
+                                  ? SystemMouseCursors.basic
+                                  : SystemMouseCursors.click),
+                        ),
+                        child: Text(
+                          _recoveryTime == null
+                              ? '--:--'
+                              : '${_recoveryTime!.hour.toString().padLeft(2, '0')}:${_recoveryTime!.minute.toString().padLeft(2, '0')}',
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 13),
+                        ),
                       ),
                     ),
                   ],

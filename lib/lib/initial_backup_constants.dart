@@ -13,6 +13,10 @@ const String kTempDbFolderName = 'DB_TEMP';
 
 const String kInitialBackupDoneKey = 'INITIAL_HISTORY_BACKUP_DONE_V1';
 const String kBackupRootPathKey = 'BACKUP_ROOT_PATH_V1';
+const String kRecoveryTimeKey = 'RECOVERY_SCHEDULE_TIME_V1';
+
+/// Default recovery flush time: 03:00.
+const ({int hour, int minute}) kDefaultRecoveryTime = (hour: 3, minute: 0);
 
 /// Convert MAC address into a Windows-safe folder name.
 /// Example: `02:81:0c:0c:f4:2f` -> `02_81_0c_0c_f4_2f`
@@ -30,6 +34,22 @@ Future<String?> loadBackupRootPath(String macaddr) async {
     return info['path']?.toString();
   } catch (_) {
     return null;
+  }
+}
+
+Future<void> storeRecoveryTime(int hour, int minute) async {
+  await app.storeJson(kRecoveryTimeKey, {'hour': hour, 'minute': minute});
+}
+
+Future<({int hour, int minute})> loadRecoveryTime() async {
+  try {
+    final info = await app.loadJson(kRecoveryTimeKey);
+    return (
+      hour:   (info['hour']   as num?)?.toInt() ?? kDefaultRecoveryTime.hour,
+      minute: (info['minute'] as num?)?.toInt() ?? kDefaultRecoveryTime.minute,
+    );
+  } catch (_) {
+    return kDefaultRecoveryTime;
   }
 }
 

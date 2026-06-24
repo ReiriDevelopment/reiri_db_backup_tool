@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui'; // for CustomScrollBehavior
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,30 +9,68 @@ import 'package:reiri_db_backup_tool/screen/controller_selection_screen.dart';
 import 'package:reiri_db_backup_tool/screen/home_screen.dart';
 import 'package:reiri_db_backup_tool/screen/initial_backup_screen.dart';
 import 'package:reiri_db_backup_tool/screen/login_screen.dart';
+import 'package:reiri_db_backup_tool/service/file_log_service.dart';
 import 'package:reiri_db_backup_tool/service/tray_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'screen/language_selection_screen.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Run the whole app inside a guarded zone so that unhandled async errors
+  // (e.g. a real-time SQLite write racing against the recovery service closing
+  // the DB handles) are logged instead of terminating the process. The backup
+  // tool must keep running unattended, so an uncaught error should never crash
+  // it. See docs/issues-and-solutions.md.
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  await windowManager.ensureInitialized();
+    // Framework (build/layout/paint) errors → log, then fall back to the
+    // default handler so they still surface in the console during development.
+    final defaultOnError = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      _logCrash('FlutterError', details.exception, details.stack);
+      defaultOnError?.call(details);
+    };
 
-  const windowOptions = WindowOptions(
-    title: 'Reiri DB Backup Tool',
-    minimumSize: Size(800, 600),
-    center: true,
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.normal,
-  );
-  await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
+    // Uncaught errors from the engine / platform dispatcher. Returning true
+    // marks the error as handled so it does not propagate and kill the app.
+    PlatformDispatcher.instance.onError = (error, stack) {
+      _logCrash('PlatformDispatcher', error, stack);
+      return true;
+    };
+
+    await windowManager.ensureInitialized();
+
+    const windowOptions = WindowOptions(
+      title: 'Reiri DB Backup Tool',
+      minimumSize: Size(800, 600),
+      center: true,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+    );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+
+    HttpOverrides.global = MyHttpOverrides();
+    runApp(ProviderScope(child: App()));
+  }, (error, stack) {
+    // Any async error not caught anywhere else lands here.
+    _logCrash('Uncaught', error, stack);
   });
+}
 
-  HttpOverrides.global = MyHttpOverrides();
-  runApp(ProviderScope(child: App()));
+/// Records an otherwise-fatal error to the backup log (and console) so the
+/// process survives and the failure can be diagnosed after the fact.
+void _logCrash(String source, Object error, StackTrace? stack) {
+  final msg = '[Crash][$source] $error';
+  // FileLogService is a no-op until init() runs; print guarantees visibility
+  // even for errors thrown before the backup path is known.
+  print(msg);
+  if (stack != null) print(stack);
+  FileLogService().log(msg);
+  if (stack != null) FileLogService().log(stack.toString());
 }
 
 // ── Root app widget ──────────────────────────────────────────────────────────

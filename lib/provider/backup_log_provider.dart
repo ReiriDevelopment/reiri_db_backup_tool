@@ -4,7 +4,7 @@ import 'package:reiri_app_core/reiri_app_core.dart';
 import '../model/backup_log_entry.dart';
 
 const _kStorageKey = 'BACKUP_LOG_V1';
-const _kMaxEntries = 1000;
+const _kMaxEntries = 1000000;
 
 final backupLogProvider =
     NotifierProvider<BackupLogNotifier, List<BackupLogEntry>>(

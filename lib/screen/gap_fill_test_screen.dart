@@ -1,11 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/provider/recovery_provider.dart';
+import 'package:reiri_db_backup_tool/service/backup_db_access.dart';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -19,11 +18,11 @@ class GapFillTestScreen extends ConsumerStatefulWidget {
 class _GapFillTestScreenState extends ConsumerState<GapFillTestScreen> {
   // One DbAccess instance per db type so each has its own communicationProvider.
   final _cmds = {
-    'meter':   DbAccess(),
-    'optime':  DbAccess(),
-    'trend':   DbAccess(),
-    'ppd':     DbAccess(),
-    'history': DbAccess(),
+    'meter':   BackupDbAccess(),
+    'optime':  BackupDbAccess(),
+    'trend':   BackupDbAccess(),
+    'ppd':     BackupDbAccess(),
+    'history': BackupDbAccess(),
   };
 
   static const _dbTypes = ['meter', 'optime', 'trend', 'ppd', 'history'];
@@ -469,9 +468,20 @@ class _ResultCard extends StatefulWidget {
   State<_ResultCard> createState() => _ResultCardState();
 }
 
+// ── Column schemas ────────────────────────────────────────────────────────────
+// Approximate column labels per DB type (based on controller db_backup format).
+// Index 0 and 1 are treated as key columns (date + point id); rest are compare.
+const _kColumnLabels = <String, List<String>>{
+  'meter':   ['date', 'point_id', 'amount'],
+  'optime':  ['date', 'point_id', 'stat', 'cool', 'heat'],
+  'trend':   ['date', 'point_id', 'type', 'value'],
+  'ppd':     ['date', 'point_id', 'value'],
+  'history': ['date', 'type', 'com', 'id', 'data'],
+};
+
 class _ResultCardState extends State<_ResultCard> {
   bool _expanded = true;
-  int _maxRecords = 5;
+  int _maxRecords = 500;
 
   @override
   Widget build(BuildContext context) {
@@ -613,86 +623,213 @@ class _ResultCardState extends State<_ResultCard> {
             _Badge('${list.length} records total',
                 Colors.green.shade700, Colors.green.shade50),
             const SizedBox(width: 8),
-            Text(
-              'Showing first $_maxRecords',
-              style:
-                  TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-            ),
+            if (list.length > _maxRecords)
+              Text(
+                'Showing first $_maxRecords',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
           ],
         ),
         const SizedBox(height: 10),
 
-        // Raw records
+        // Table view
+        _RecordTable(
+          dbType: widget.dbType,
+          records: showing,
+          allCount: list.length,
+          maxShown: _maxRecords,
+          onShowMore: () => setState(() => _maxRecords += 500),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Record table ──────────────────────────────────────────────────────────────
+
+class _RecordTable extends StatelessWidget {
+  final String dbType;
+  final List<dynamic> records;
+  final int allCount;
+  final int maxShown;
+  final VoidCallback onShowMore;
+
+  const _RecordTable({
+    required this.dbType,
+    required this.records,
+    required this.allCount,
+    required this.maxShown,
+    required this.onShowMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (records.isEmpty) return const SizedBox();
+
+    final schema = _kColumnLabels[dbType];
+    final firstRow = records.first;
+    final colCount =
+        firstRow is List ? firstRow.length : 1;
+
+    // Build column headers: use schema labels if available, else 'col N'.
+    final headers = List.generate(colCount, (i) {
+      if (schema != null && i < schema.length) return schema[i];
+      return 'col $i';
+    });
+
+    // Columns 0 (date) and 1 (id/point_id) are key columns.
+    const keyCount = 2;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Legend
+        Row(
+          children: [
+            _ColTag('KEY', Colors.blue.shade700, Colors.blue.shade50,
+                Colors.blue.shade200),
+            const SizedBox(width: 6),
+            _ColTag('COMPARE', Colors.purple.shade700, Colors.purple.shade50,
+                Colors.purple.shade200),
+            const Spacer(),
+            Text(
+              '$colCount column(s)',
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
-            color: cs.surfaceContainerHigh,
+            border: Border.all(color: cs.outlineVariant),
             borderRadius: BorderRadius.circular(6),
           ),
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '// Raw record format — each entry is one DB row',
-                style: TextStyle(
-                    fontSize: 10,
-                    fontFamily: 'monospace',
-                    color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(height: 6),
-              ...showing.asMap().entries.map((e) {
-                final pretty =
-                    const JsonEncoder.withIndent('  ').convert(e.value);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '[${e.key}]:',
-                        style: TextStyle(
-                            fontSize: 10,
-                            fontFamily: 'monospace',
-                            color: cs.primary,
-                            fontWeight: FontWeight.w600),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowHeight: 32,
+              dataRowMinHeight: 28,
+              dataRowMaxHeight: 40,
+              horizontalMargin: 12,
+              columnSpacing: 16,
+              headingRowColor: WidgetStateProperty.all(
+                  cs.surfaceContainerHigh),
+              columns: List.generate(colCount, (i) {
+                final label = headers[i];
+                final isKey = i < keyCount;
+                return DataColumn(
+                  label: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 2),
+                    decoration: isKey
+                        ? BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                                color: Colors.blue.shade200),
+                          )
+                        : null,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w600,
+                        color: isKey
+                            ? Colors.blue.shade700
+                            : cs.onSurface,
                       ),
-                      SelectableText(
-                        pretty,
-                        style: const TextStyle(
-                            fontSize: 11, fontFamily: 'monospace'),
-                      ),
-                    ],
+                    ),
                   ),
                 );
               }),
-              if (list.length > _maxRecords)
-                TextButton(
-                  onPressed: () =>
-                      setState(() => _maxRecords += 5),
-                  style: const ButtonStyle(
-                    mouseCursor: WidgetStatePropertyAll(
-                        SystemMouseCursors.click),
-                  ),
-                  child: Text(
-                    'Show more (${list.length - _maxRecords} remaining)',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-            ],
+              rows: records.map((rec) {
+                final cells = rec is List ? rec : [rec];
+                return DataRow(
+                  cells: List.generate(colCount, (i) {
+                    final raw = i < cells.length ? cells[i] : null;
+                    final isKey = i < keyCount;
+                    // Format date column (col 0) as a readable string
+                    final display = (i == 0 && raw is int && raw > 100000000000)
+                        ? _fmtDbInt(raw)
+                        : (raw == null ? '—' : '$raw');
+                    return DataCell(
+                      Text(
+                        display,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          color: isKey
+                              ? Colors.blue.shade800
+                              : cs.onSurface,
+                          fontWeight: isKey
+                              ? FontWeight.w500
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    );
+                  }),
+                );
+              }).toList(),
+            ),
           ),
         ),
-
-        // Column count hint
-        if (list.isNotEmpty && list.first is List) ...[
+        if (allCount > maxShown) ...[
           const SizedBox(height: 8),
-          Text(
-            '→ Record has ${(list.first as List).length} columns. '
-            'Check above to identify schema before writing to SQLite.',
-            style: TextStyle(
-                fontSize: 11, color: cs.onSurfaceVariant),
+          TextButton(
+            onPressed: onShowMore,
+            style: const ButtonStyle(
+              mouseCursor:
+                  WidgetStatePropertyAll(SystemMouseCursors.click),
+            ),
+            child: Text(
+              'Show more (${allCount - maxShown} remaining)',
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
         ],
       ],
+    );
+  }
+
+  // Formats a 12-digit DB int (YYYYMMDDHHmm) as 'YYYY-MM-DD HH:mm'.
+  static String _fmtDbInt(int v) {
+    final year  = v ~/ 100000000;
+    final rest  = v %  100000000;
+    final month = rest ~/ 1000000;
+    final rest2 = rest %  1000000;
+    final day   = rest2 ~/ 10000;
+    final rest3 = rest2 %  10000;
+    final hour  = rest3 ~/ 100;
+    final min   = rest3 %  100;
+    return '$year-${_p(month)}-${_p(day)} ${_p(hour)}:${_p(min)}';
+  }
+
+  static String _p(int v) => v.toString().padLeft(2, '0');
+}
+
+class _ColTag extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color bg;
+  final Color border;
+  const _ColTag(this.label, this.color, this.bg, this.border);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+            fontSize: 10, color: color, fontWeight: FontWeight.w600),
+      ),
     );
   }
 }

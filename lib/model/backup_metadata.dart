@@ -56,8 +56,14 @@ class BackupMetadata {
   final BackupState backupState;
   final FlushStatus flushStatus;
 
-  /// Gaps detected on the last reconnect, one entry per affected DB file.
+  /// One entry per affected DB file with the **merged** time range covering
+  /// all disconnect periods. Used for gap-fill and flush operations — merging
+  /// ensures rows are appended to MAIN in chronological order.
   final List<GapRange> detectedGaps;
+
+  /// Every discrete disconnect period accumulated since the last flush.
+  /// May contain multiple entries for the same DB file. Used only for display.
+  final List<GapRange> gapPeriods;
 
   /// Absolute path to the TEMP DB directory (null when no temp exists).
   final String? tempDbPath;
@@ -68,6 +74,7 @@ class BackupMetadata {
     this.backupState = BackupState.idle,
     this.flushStatus = FlushStatus.none,
     this.detectedGaps = const [],
+    this.gapPeriods = const [],
     this.tempDbPath,
   });
 
@@ -77,6 +84,7 @@ class BackupMetadata {
     BackupState? backupState,
     FlushStatus? flushStatus,
     List<GapRange>? detectedGaps,
+    List<GapRange>? gapPeriods,
     String? tempDbPath,
     bool clearDisconnectedAt = false,
     bool clearTConnect = false,
@@ -90,6 +98,7 @@ class BackupMetadata {
       backupState: backupState ?? this.backupState,
       flushStatus: flushStatus ?? this.flushStatus,
       detectedGaps: detectedGaps ?? this.detectedGaps,
+      gapPeriods: gapPeriods ?? this.gapPeriods,
       tempDbPath: clearTempDbPath ? null : (tempDbPath ?? this.tempDbPath),
     );
   }
@@ -100,6 +109,7 @@ class BackupMetadata {
     'backupState': backupState.name,
     'flushStatus': flushStatus.name,
     'detectedGaps': detectedGaps.map((g) => g.toJson()).toList(),
+    'gapPeriods': gapPeriods.map((g) => g.toJson()).toList(),
     'tempDbPath': tempDbPath,
   };
 
@@ -119,6 +129,9 @@ class BackupMetadata {
       orElse: () => FlushStatus.none,
     ),
     detectedGaps: (j['detectedGaps'] as List<dynamic>? ?? [])
+        .map((g) => GapRange.fromJson(g as Map<String, dynamic>))
+        .toList(),
+    gapPeriods: (j['gapPeriods'] as List<dynamic>? ?? [])
         .map((g) => GapRange.fromJson(g as Map<String, dynamic>))
         .toList(),
     tempDbPath: j['tempDbPath'] as String?,

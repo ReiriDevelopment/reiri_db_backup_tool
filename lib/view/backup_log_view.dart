@@ -1,7 +1,8 @@
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:reiri_app_core/reiri_app_core.dart';
-
 import 'package:reiri_db_backup_tool/model/backup_log_entry.dart';
 import 'package:reiri_db_backup_tool/provider/backup_log_provider.dart';
 
@@ -15,17 +16,25 @@ const _kAllDbNames = [
 
 class BackupLogView extends ConsumerStatefulWidget {
   final String macAddr;
-  const BackupLogView({super.key, required this.macAddr});
+
+  /// Full path to the current controller folder (e.g. `C:\backup\AA-BB-CC...`).
+  /// When set, the CSV save dialog opens here by default.
+  final String? backupPath;
+
+  const BackupLogView({super.key, required this.macAddr, this.backupPath});
 
   @override
   ConsumerState<BackupLogView> createState() => _BackupLogViewState();
 }
 
+const _kDisplayCap = 100000;
+const _kPageSize = 20;
+
 class _BackupLogViewState extends ConsumerState<BackupLogView> {
   BackupLogType? _typeFilter;
   BackupLogResult? _resultFilter;
   String? _dbFilter;
-  int _shownCount = 20;
+  int _shownCount = _kPageSize;
 
   List<BackupLogEntry> _applyFilters(List<BackupLogEntry> entries) {
     return entries.where((e) {
@@ -33,23 +42,47 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
       if (_resultFilter != null && e.result != _resultFilter) return false;
       if (_dbFilter != null && e.database != _dbFilter) return false;
       return true;
-    }).toList();
+    }).take(_kDisplayCap).toList();
   }
 
-  void _resetShown() => _shownCount = 20;
+  void _resetShown() => _shownCount = _kPageSize;
 
   Future<void> _exportCsv(List<BackupLogEntry> entries) async {
-    final rows = <List<dynamic>>[
-      ['Backed Up At', 'Record Time', 'Type', 'Result', 'Database'],
-      ...entries.map((e) => [
-            e.backedUpAt != null ? _fmtDateTime(e.backedUpAt!) : '',
-            _fmtDateTime(e.timestamp),
-            e.type == BackupLogType.realtime ? 'Real-time' : 'Recovery',
-            e.result == BackupLogResult.success ? 'Success' : 'Fail',
-            e.database,
-          ]),
-    ];
-    await app.saveToCsv('backup_log.csv', rows);
+    final location = await getSaveLocation(
+      suggestedName: 'backup_log.csv',
+      initialDirectory: widget.backupPath,
+      acceptedTypeGroups: [
+        const XTypeGroup(label: 'CSV', extensions: ['csv']),
+      ],
+    );
+    if (location == null) return;
+
+    String csvCell(String v) {
+      if (v.contains(',') || v.contains('"') || v.contains('\n')) {
+        return '"${v.replaceAll('"', '""')}"';
+      }
+      return v;
+    }
+
+    String csvRow(List<String> cols) =>
+        cols.map(csvCell).join(',');
+
+    final buf = StringBuffer();
+    buf.writeln(csvRow(['Backed Up At', 'Record Time', 'Type', 'Result', 'Database', 'Details']));
+    for (final e in entries) {
+      buf.writeln(csvRow([
+        e.backedUpAt != null ? _fmtDateTime(e.backedUpAt!) : '',
+        _fmtDateTime(e.timestamp),
+        e.type == BackupLogType.realtime ? 'Real-time' : 'Recovery',
+        e.result == BackupLogResult.success ? 'Success' : 'Fail',
+        e.database,
+        e.details ?? '',
+      ]));
+    }
+
+    var savePath = location.path;
+    if (!savePath.toLowerCase().endsWith('.csv')) savePath = '$savePath.csv';
+    await File(savePath).writeAsString(buf.toString());
   }
 
   @override
@@ -230,9 +263,10 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                                           vertical: 12),
                                       child: TextButton(
                                         onPressed: () => setState(
-                                            () => _shownCount += 20),
+                                            () => _shownCount += _kPageSize),
                                         style: const ButtonStyle(
-                                          mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
+                                          mouseCursor: WidgetStatePropertyAll(
+                                              SystemMouseCursors.click),
                                         ),
                                         child: const Text('Load More'),
                                       ),

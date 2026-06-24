@@ -180,16 +180,41 @@ class InitialBackupScreen extends ReiriScreen {
       // routes real-time → TEMP DB on first connect and schedules gap-fill.
       try {
         final safeMac = macToSafeFolderName(macaddr!);
+        final macDir = '$backupPath\\$safeMac';
         final metaService = BackupMetadataService();
-        await metaService.init('$backupPath\\$safeMac');
-        await metaService.recordDisconnect();
+        await metaService.init(macDir);
+        // Drop any stale gaps / in-progress TEMP flush from a previous install.
+        await metaService.reset();
+        final staleTempDir = Directory('$macDir\\$kTempDbFolderName');
+        if (await staleTempDir.exists()) {
+          await staleTempDir.delete(recursive: true);
+        }
+        final ftpCompletedAt = DateTime.now();
         if (initialGaps.isNotEmpty) {
-          final seeded = metaService.current.copyWith(
+          // Seed both detectedGaps AND gapPeriods so the Recovery tab shows
+          // the rows immediately (the dot comes from detectedGaps; the table
+          // rows come from gapPeriods — seeding only one causes dot-with-empty-
+          // table). Also set tConnect so _computeGaps can detect additional
+          // boundaries that cross between FTP completion and the first WebSocket
+          // connect.
+          await metaService.save(BackupMetadata(
+            tConnect: ftpCompletedAt,
             detectedGaps: initialGaps,
+            gapPeriods: initialGaps,
             backupState: BackupState.realtimeTemp,
             flushStatus: FlushStatus.pending,
-          );
-          await metaService.save(seeded);
+          ));
+        } else {
+          // No initial gaps detected — stamp disconnectedAt so _computeGaps
+          // in onConnected() can catch any boundary that is written between
+          // FTP completion and the first WebSocket connect.  Without this, a
+          // record written at exactly the FTP completion timestamp is missed
+          // when real-time backup starts just after the controller writes it
+          // (e.g. FTP completes at 17:39:50, controller writes 17:35-stamped
+          // trend record at 17:40:00, real-time starts at 17:40:05).
+          await metaService.save(BackupMetadata(
+            disconnectedAt: ftpCompletedAt,
+          ));
         }
       } catch (_) {}
       await BackupLogNotifier.clearEntries(macaddr!);

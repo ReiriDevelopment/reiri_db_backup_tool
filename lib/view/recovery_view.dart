@@ -76,18 +76,23 @@ class RecoveryView extends ConsumerWidget {
           const SizedBox(height: 16),
 
           // ── Status banner when TEMP DB is active ────────────────────────────
-          if (state.backupState == BackupState.realtimeTemp)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-              child: _TempDbBanner(isFlushing: state.isFlushing, ref: ref),
-            ),
+          // if (state.backupState == BackupState.realtimeTemp)
+          //   Padding(
+          //     padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          //     child: _TempDbBanner(isFlushing: state.isFlushing, ref: ref),
+          //   ),
 
-          // ── Gap table or empty state ────────────────────────────────────────
+          // ── Gap table / loading overlay / empty state ───────────────────────
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: state.hasGaps
-                  ? _GapTable(gaps: state.gaps, scheduledAt: state.scheduledAt)
+              child: state.isFlushing
+                  ? _FlushingOverlay(step: state.flushStep)
+                  : state.hasGaps
+                  ? _GapTable(
+                      periods: state.gapPeriods,
+                      scheduledAt: state.scheduledAt,
+                    )
                   : _EmptyState(backupState: state.backupState),
             ),
           ),
@@ -119,7 +124,7 @@ class _ScanButton extends ConsumerWidget {
               ),
             )
           : const Icon(Icons.search_rounded, size: 16),
-      label: Text(state.isScanning ? 'Scanning' + '...' : 'Scan for Gaps'),
+      label: Text(state.isScanning ? 'Scanning...' : 'Scan for Gaps'),
       style:
           FilledButton.styleFrom(
             backgroundColor: const Color(0xFF0BAEC7),
@@ -173,7 +178,7 @@ class _TempDbBanner extends StatelessWidget {
             child: Text(
               isFlushing
                   ? 'Applying recovered records'
-                  : 'Recovering missed records in the background.',
+                  : 'Filling in missing data in the background.',
               style: TextStyle(fontSize: 13, color: Colors.orange.shade800),
             ),
           ),
@@ -206,9 +211,9 @@ class _TempDbBanner extends StatelessWidget {
 // ── Gap table ─────────────────────────────────────────────────────────────────
 
 class _GapTable extends StatelessWidget {
-  final List<GapRange> gaps;
+  final List<GapRange> periods;
   final DateTime? scheduledAt;
-  const _GapTable({required this.gaps, required this.scheduledAt});
+  const _GapTable({required this.periods, required this.scheduledAt});
 
   @override
   Widget build(BuildContext context) {
@@ -225,9 +230,9 @@ class _GapTable extends StatelessWidget {
           const Divider(height: 1),
           Expanded(
             child: ListView.builder(
-              itemCount: gaps.length,
+              itemCount: periods.length,
               itemBuilder: (_, i) =>
-                  _GapRow(gap: gaps[i], scheduledAt: scheduledAt),
+                  _GapRow(gap: periods[i], scheduledAt: scheduledAt),
             ),
           ),
         ],
@@ -358,6 +363,57 @@ class _GapRow extends StatelessWidget {
   }
 }
 
+// ── Flushing overlay ──────────────────────────────────────────────────────────
+
+class _FlushingOverlay extends StatelessWidget {
+  final String? step;
+  const _FlushingOverlay({this.step});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: const Color(0xFF0BAEC7),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Recovering missing data',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+            ),
+            if (step != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                step!,
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
@@ -412,13 +468,13 @@ String _fmtDate(DateTime dt) {
 
 String _fmtScheduled(DateTime dt) {
   final now = DateTime.now();
-  final isTonight =
+  final isToday =
       dt.day == now.day && dt.month == now.month && dt.year == now.year;
   final h = dt.hour.toString().padLeft(2, '0');
   final m = dt.minute.toString().padLeft(2, '0');
-  return isTonight
-      ? 'Tonight $h:$m'
-      : '${_kMonths[dt.month - 1]} ${dt.day} $h:$m';
+  if (!isToday) return '${_kMonths[dt.month - 1]} ${dt.day} $h:$m';
+  final label = dt.hour >= 18 ? 'Tonight' : 'Today';
+  return '$label $h:$m';
 }
 
 const _kMonths = [

@@ -55,6 +55,15 @@ class BackupMetadataService {
     await _write(metadata);
   }
 
+  /// Wipes all persisted recovery state back to an empty baseline.
+  ///
+  /// Called when a fresh initial backup establishes a new baseline, so stale
+  /// gaps or an interrupted TEMP flush left over from a previous install do not
+  /// carry over and light up the Recovery tab on a clean start.
+  Future<void> reset() async {
+    await save(BackupMetadata.empty());
+  }
+
   /// Writes the current time as the disconnect timestamp.
   /// Call on explicit disconnect, logout, dispose, and every minute as a
   /// heartbeat so crashes / force-kills leave a recent timestamp.
@@ -74,10 +83,13 @@ class BackupMetadataService {
   Future<List<GapRange>> recordConnect(DateTime tConnect) async {
     final newGaps = _computeGaps(tConnect);
     final mergedGaps = _mergeGaps(_current.detectedGaps, newGaps);
+    // Accumulate discrete periods (no merging) for UI display.
+    final periods = [..._current.gapPeriods, ...newGaps];
 
     final updated = _current.copyWith(
       tConnect: tConnect,
       detectedGaps: mergedGaps,
+      gapPeriods: periods,
       backupState: mergedGaps.isEmpty ? BackupState.realtimeMain : BackupState.realtimeTemp,
       flushStatus: mergedGaps.isEmpty ? FlushStatus.none : FlushStatus.pending,
     );
@@ -192,6 +204,20 @@ class BackupMetadataService {
         timeMin ~/ 60, timeMin % 60);
   }
 
+  /// Records that TEMP DB is the active write target for gap recovery.
+  /// The flush has NOT started yet — use [markFlushInProgress] only when
+  /// [RecoveryService._doFlush] actually begins executing.
+  Future<void> saveTempPath(String tempDbPath) async {
+    final updated = _current.copyWith(
+      tempDbPath: tempDbPath,
+      flushStatus: FlushStatus.pending,
+    );
+    await save(updated);
+  }
+
+  /// Marks that the TEMP→MAIN flush is actively executing.  This is the
+  /// checkpoint that [RecoveryService.init] uses to detect a crash-interrupted
+  /// flush on the next startup.  Call only at the very start of [_doFlush].
   Future<void> markFlushInProgress(String tempDbPath) async {
     final updated = _current.copyWith(
       tempDbPath: tempDbPath,
@@ -205,6 +231,7 @@ class BackupMetadataService {
       flushStatus: FlushStatus.completed,
       backupState: BackupState.realtimeMain,
       detectedGaps: [],
+      gapPeriods: [],
       clearTempDbPath: true,
       clearDisconnectedAt: true,
     );
@@ -214,6 +241,7 @@ class BackupMetadataService {
   Future<void> clearGaps() async {
     final updated = _current.copyWith(
       detectedGaps: [],
+      gapPeriods: [],
       backupState: BackupState.realtimeMain,
       flushStatus: FlushStatus.none,
       clearTempDbPath: true,
