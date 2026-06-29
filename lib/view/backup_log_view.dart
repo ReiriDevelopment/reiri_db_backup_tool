@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -83,6 +84,24 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
     var savePath = location.path;
     if (!savePath.toLowerCase().endsWith('.csv')) savePath = '$savePath.csv';
     await File(savePath).writeAsString(buf.toString());
+  }
+
+  Future<void> _exportJson(List<BackupLogEntry> entries) async {
+    final location = await getSaveLocation(
+      suggestedName: 'backup_log.json',
+      initialDirectory: widget.backupPath,
+      acceptedTypeGroups: [
+        const XTypeGroup(label: 'JSON', extensions: ['json']),
+      ],
+    );
+    if (location == null) return;
+
+    final json = const JsonEncoder.withIndent('  ')
+        .convert(entries.map((e) => e.toJson()).toList());
+
+    var savePath = location.path;
+    if (!savePath.toLowerCase().endsWith('.json')) savePath = '$savePath.json';
+    await File(savePath).writeAsString(json);
   }
 
   @override
@@ -172,6 +191,20 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                           _resetShown();
                         })),
                 const Spacer(),
+                OutlinedButton.icon(
+                  onPressed:
+                      filtered.isEmpty ? null : () => _exportJson(filtered),
+                  icon: const Icon(Icons.data_object_rounded, size: 15),
+                  label: const Text('Export JSON'),
+                  style: OutlinedButton.styleFrom(
+                      visualDensity: VisualDensity.compact).copyWith(
+                    mouseCursor: WidgetStateProperty.resolveWith((s) =>
+                        s.contains(WidgetState.disabled)
+                            ? SystemMouseCursors.basic
+                            : SystemMouseCursors.click),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed:
                       filtered.isEmpty ? null : () => _exportCsv(filtered),

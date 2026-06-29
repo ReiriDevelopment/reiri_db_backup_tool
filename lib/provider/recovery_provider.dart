@@ -284,11 +284,12 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
         await _service!.deduplicateInMain(f);
       }
 
-      // Re-open and re-initialise all MAIN DB handles so in-memory caches
-      // reflect the catch-up writes. Without this, addTrendData / addMeterData
-      // called by subsequent realtime db_wr packets can see stale cache state
-      // and fail silently, causing a gap in MAIN after the flush.
-      await _service!.reinitMainDb();
+      // Refresh the meter last-value cache from MAIN so subsequent realtime
+      // meter amounts are computed against the post-catch-up / post-dedup
+      // values. Uses a separate read-only connection — does NOT close app.db's
+      // live handles — so real-time writes (e.g. the dss4 reconnect burst)
+      // arriving at exactly the flush minute are never dropped.
+      await _service!.refreshMeterValueCacheFromMain();
 
       // Add one recovery log entry per DB type with the actual record time
       // (earliest record date from the controller) and a details summary.

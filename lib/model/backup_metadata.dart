@@ -68,6 +68,11 @@ class BackupMetadata {
   /// Absolute path to the TEMP DB directory (null when no temp exists).
   final String? tempDbPath;
 
+  /// When true, [HomeScreen] will trigger gap-fill automatically on the first
+  /// connect after an initial FTP/local-import setup, without requiring the
+  /// user to navigate to the recovery page.
+  final bool autoFill;
+
   const BackupMetadata({
     this.disconnectedAt,
     this.tConnect,
@@ -76,6 +81,7 @@ class BackupMetadata {
     this.detectedGaps = const [],
     this.gapPeriods = const [],
     this.tempDbPath,
+    this.autoFill = false,
   });
 
   BackupMetadata copyWith({
@@ -89,6 +95,7 @@ class BackupMetadata {
     bool clearDisconnectedAt = false,
     bool clearTConnect = false,
     bool clearTempDbPath = false,
+    bool? autoFill,
   }) {
     return BackupMetadata(
       disconnectedAt: clearDisconnectedAt
@@ -100,6 +107,7 @@ class BackupMetadata {
       detectedGaps: detectedGaps ?? this.detectedGaps,
       gapPeriods: gapPeriods ?? this.gapPeriods,
       tempDbPath: clearTempDbPath ? null : (tempDbPath ?? this.tempDbPath),
+      autoFill: autoFill ?? this.autoFill,
     );
   }
 
@@ -111,6 +119,7 @@ class BackupMetadata {
     'detectedGaps': detectedGaps.map((g) => g.toJson()).toList(),
     'gapPeriods': gapPeriods.map((g) => g.toJson()).toList(),
     'tempDbPath': tempDbPath,
+    'autoFill': autoFill,
   };
 
   factory BackupMetadata.fromJson(Map<String, dynamic> j) => BackupMetadata(
@@ -135,6 +144,7 @@ class BackupMetadata {
         .map((g) => GapRange.fromJson(g as Map<String, dynamic>))
         .toList(),
     tempDbPath: j['tempDbPath'] as String?,
+    autoFill: j['autoFill'] as bool? ?? false,
   );
 
   factory BackupMetadata.empty() => const BackupMetadata();

@@ -175,7 +175,7 @@ class RecoveryService {
 
     final db = await databaseFactoryFfi.openDatabase(
       mainPath,
-      options: OpenDatabaseOptions(readOnly: true),
+      options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
     );
     try {
       // Latest value per db_id (meter.id is the surrogate db_id).
@@ -217,7 +217,10 @@ class RecoveryService {
       final mainPath = '$_mainDbDir\\${_dbTypeToFile(type)}';
       final tempPath = '$_tempDbDir\\${_dbTypeToFile(type)}';
       if (!await File(mainPath).exists()) continue;
-      final tempDb = await databaseFactoryFfi.openDatabase(tempPath);
+      final tempDb = await databaseFactoryFfi.openDatabase(
+        tempPath,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
       try {
         await tempDb.execute('ATTACH ? AS main_db', [mainPath]);
         await tempDb.transaction((txn) async {
@@ -357,7 +360,10 @@ class RecoveryService {
     // Resolve any new points before the copy so db_ids are in sync.
     await _syncNewPointsInTemp(mainPath, tempPath, dbType);
 
-    final db = await databaseFactoryFfi.openDatabase(mainPath);
+    final db = await databaseFactoryFfi.openDatabase(
+      mainPath,
+      options: OpenDatabaseOptions(singleInstance: false),
+    );
     try {
       await db.execute('ATTACH ? AS temp_db', [tempPath]);
 
@@ -433,7 +439,10 @@ class RecoveryService {
   /// (the common case after seeding at TEMP creation).
   Future<void> _syncNewPointsInTemp(
       String mainPath, String tempPath, String dbType) async {
-    final mainDb = await databaseFactoryFfi.openDatabase(mainPath);
+    final mainDb = await databaseFactoryFfi.openDatabase(
+      mainPath,
+      options: OpenDatabaseOptions(singleInstance: false),
+    );
     try {
       await mainDb.execute('ATTACH ? AS temp_db', [tempPath]);
 
@@ -479,7 +488,10 @@ class RecoveryService {
       }
 
       // Patch TEMP: update data rows and point_id to use MAIN's db_id values.
-      final tempDb = await databaseFactoryFfi.openDatabase(tempPath);
+      final tempDb = await databaseFactoryFfi.openDatabase(
+        tempPath,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
       try {
         final tables = await tempDb.rawQuery(
           "SELECT name FROM sqlite_master WHERE type='table' "
@@ -554,11 +566,11 @@ class RecoveryService {
       {DateTime? from, DateTime? to}) async {
     final tempDb = await databaseFactoryFfi.openDatabase(
       tempPath,
-      options: OpenDatabaseOptions(readOnly: true),
+      options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
     );
     final db = await databaseFactoryFfi.openDatabase(
       mainPath,
-      options: OpenDatabaseOptions(readOnly: false),
+      options: OpenDatabaseOptions(readOnly: false, singleInstance: false),
     );
     try {
       final tables = await tempDb.rawQuery(
@@ -683,7 +695,7 @@ class RecoveryService {
     // Open MAIN file by full path — does NOT affect app.db (TEMP path).
     final rawDb = await databaseFactoryFfi.openDatabase(
       mainPath,
-      options: OpenDatabaseOptions(readOnly: false),
+      options: OpenDatabaseOptions(readOnly: false, singleInstance: false),
     );
     final mainDb = ReiriDb();
     mainDb.db[dbType] = rawDb;
@@ -806,7 +818,10 @@ class RecoveryService {
   Future<void> deduplicateInMain(String dbFile) => _synchronized(() async {
     final mainPath = '$_mainDbDir\\$dbFile';
     if (!await File(mainPath).exists()) return;
-    final db = await databaseFactoryFfi.openDatabase(mainPath);
+    final db = await databaseFactoryFfi.openDatabase(
+      mainPath,
+      options: OpenDatabaseOptions(singleInstance: false),
+    );
     try {
       final tables = await db.rawQuery(
         "SELECT name FROM sqlite_master WHERE type='table' "
@@ -841,6 +856,46 @@ class RecoveryService {
   /// Convenience wrapper kept for callers that already reference this by name.
   Future<void> deduplicateTrendInMain() => deduplicateInMain('trend.db');
 
+  /// Refreshes [app.db]'s in-memory meter last-value cache from MAIN after
+  /// catch-up writes, WITHOUT closing any live DB handles.
+  ///
+  /// Unlike [reinitMainDb], this opens a separate read-only connection to
+  /// MAIN meter.db, overwrites all cache entries with the latest values from
+  /// disk, then closes that read-only connection — leaving [app.db]'s own
+  /// handle open so concurrent real-time writes are never interrupted.
+  ///
+  /// Called instead of [reinitMainDb] after the flush cycle to avoid the
+  /// brief handle-close window that silently dropped real-time history records
+  /// arriving at the reconnect minute (e.g. dss4 connect burst events).
+  Future<void> refreshMeterValueCacheFromMain() => _synchronized(() async {
+    final reiriDb = app.db;
+    if (reiriDb == null) return;
+    final valueCache = reiriDb.meterDb['value'];
+    if (valueCache is! Map) return;
+
+    final mainPath = '$_mainDbDir\\meter.db';
+    if (!await File(mainPath).exists()) return;
+
+    final db = await databaseFactoryFfi.openDatabase(
+      mainPath,
+      options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+    );
+    try {
+      final rows = await db.rawQuery(
+        'SELECT m.id AS db_id, m.value AS value FROM meter m '
+        'JOIN (SELECT id, MAX(date) AS md FROM meter GROUP BY id) x '
+        'ON m.id = x.id AND m.date = x.md',
+      );
+      for (final r in rows) {
+        valueCache['${r['db_id']}'] = (r['value'] as num).toDouble();
+      }
+    } catch (e) {
+      FileLogService().log('[Recovery] refreshMeterValueCacheFromMain failed: $e');
+    } finally {
+      await db.close();
+    }
+  });
+
   // ── helpers ────────────────────────────────────────────────────────────────
 
   // ── History data normalisation ────────────────────────────────────────────
@@ -853,18 +908,22 @@ class RecoveryService {
     return s == 'null' ? '' : s;
   }
 
-  /// Ensures the history `data` payload is stored as valid JSON.
+  /// Ensures the history `data` payload is stored as valid JSON or empty
+  /// string, matching the source DB format.
   ///
   /// The controller returns `data` as Dart Map.toString() notation
   /// (e.g. `{comm_stat: false}`) rather than proper JSON.  Keys are
   /// unquoted; string values are unquoted; booleans/numbers are correct.
   /// This converts to `{"comm_stat":false}` so the DB matches the
   /// format written by the initial FTP/local-import backup.
+  ///
+  /// Null or empty data (e.g. login/logout events) is stored as '' to
+  /// match the source DB, not '{}' which would create spurious differences.
   static String _normalizeHistoryData(dynamic v) {
-    if (v == null) return '{}';
+    if (v == null) return '';
     if (v is! String) return jsonEncode(v);
     final s = v.trim();
-    if (s.isEmpty || s == 'null') return '{}';
+    if (s.isEmpty || s == 'null') return '';
     try { jsonDecode(s); return s; } catch (_) {}
     return _dartMapToJson(s);
   }

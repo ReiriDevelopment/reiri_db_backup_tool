@@ -203,6 +203,7 @@ class InitialBackupScreen extends ReiriScreen {
             gapPeriods: initialGaps,
             backupState: BackupState.realtimeTemp,
             flushStatus: FlushStatus.pending,
+            autoFill: true,
           ));
         } else {
           // No initial gaps detected — stamp disconnectedAt so _computeGaps

@@ -109,6 +109,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
         if (mounted) ref.read(recoveryProvider.notifier).onGapsDetected(allGaps);
         if (mounted) await _loadDbStats();
+        if (_recoveryService.metadata.autoFill && mounted) {
+          FileLogService().log('[Recovery] Auto-fill: initial setup gap — starting immediately');
+          ref.read(recoveryProvider.notifier).runFlushNow();
+        }
       } else {
         FileLogService().log('[Recovery] No gaps — real-time → MAIN DB');
       }

@@ -65,12 +65,11 @@ void main() async {
 /// process survives and the failure can be diagnosed after the fact.
 void _logCrash(String source, Object error, StackTrace? stack) {
   final msg = '[Crash][$source] $error';
-  // FileLogService is a no-op until init() runs; print guarantees visibility
-  // even for errors thrown before the backup path is known.
   print(msg);
   if (stack != null) print(stack);
+  // Write only the error message to the file — stack traces are 20+ lines each
+  // and inflate the log file significantly. Full traces remain on stdout above.
   FileLogService().log(msg);
-  if (stack != null) FileLogService().log(stack.toString());
 }
 
 // ── Root app widget ──────────────────────────────────────────────────────────
