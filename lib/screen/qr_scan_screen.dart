@@ -5,7 +5,7 @@ import 'package:reiri_db_backup_tool/lib/qr_from_image_gallery.dart';
 import 'package:reiri_db_backup_tool/view/qr_scanner_view.dart';
 import 'package:reiri_db_backup_tool/view/qr_web_view.dart';
 import 'package:reiri_db_backup_tool/lib/qrc_file_reader.dart';
-import 'package:std_widget/std_widget.dart';
+import 'package:std_widget/tab_selection.dart';
 import 'dart:io';
 
 class QrScanScreen extends ConsumerWidget {

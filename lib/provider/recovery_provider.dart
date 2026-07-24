@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
+import 'package:reiri_db_backup_tool/lib/recovery_response_validation.dart';
+import 'package:reiri_db_backup_tool/lib/recovery_time_window.dart';
 import 'package:reiri_db_backup_tool/model/backup_log_entry.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/provider/backup_log_provider.dart';
@@ -29,11 +31,11 @@ class _GapSummary {
   });
 
   _GapSummary merge(_GapSummary other) => _GapSummary(
-        count: count + other.count,
-        first: _earlier(first, other.first),
-        last: _later(last, other.last),
-        rawRecords: [...rawRecords, ...other.rawRecords],
-      );
+    count: count + other.count,
+    first: _earlier(first, other.first),
+    last: _later(last, other.last),
+    rawRecords: [...rawRecords, ...other.rawRecords],
+  );
 
   static DateTime? _earlier(DateTime? a, DateTime? b) {
     if (a == null) return b;
@@ -52,6 +54,7 @@ class _GapSummary {
 class RecoveryState {
   /// Merged ranges (one per DB file) used for gap-fill operations.
   final List<GapRange> gaps;
+
   /// Discrete disconnect periods accumulated since last flush — shown in UI.
   final List<GapRange> gapPeriods;
   final BackupState backupState;
@@ -59,6 +62,7 @@ class RecoveryState {
   final bool isScanning;
   final bool isFlushing;
   final DateTime? scheduledAt;
+
   /// Current step description shown in the loading overlay while flushing.
   /// Null when not flushing.
   final String? flushStep;
@@ -101,8 +105,9 @@ class RecoveryState {
   }
 }
 
-final recoveryProvider =
-    NotifierProvider<RecoveryNotifier, RecoveryState>(RecoveryNotifier.new);
+final recoveryProvider = NotifierProvider<RecoveryNotifier, RecoveryState>(
+  RecoveryNotifier.new,
+);
 
 class RecoveryNotifier extends Notifier<RecoveryState> {
   RecoveryService? _service;
@@ -111,7 +116,7 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
   // updated whenever the user changes it.  Stored here (not in a string
   // provider) so it survives tab switches without stringDataProvider
   // auto-disposing.
-  int _recoveryHour   = kDefaultRecoveryTime.hour;
+  int _recoveryHour = kDefaultRecoveryTime.hour;
   int _recoveryMinute = kDefaultRecoveryTime.minute;
 
   @override
@@ -120,7 +125,7 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
   /// Seeds the cached recovery hour/minute from the persisted setting.
   /// Call this once at login (before [attach]) with the value from disk.
   void setRecoveryTime(int hour, int minute) {
-    _recoveryHour   = hour;
+    _recoveryHour = hour;
     _recoveryMinute = minute;
   }
 
@@ -168,7 +173,7 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
   /// Update the scheduled flush time after the user changes the setting.
   /// Only updates [scheduledAt] if a gap is currently active.
   void updateRecoveryTime(int hour, int minute) {
-    _recoveryHour   = hour;
+    _recoveryHour = hour;
     _recoveryMinute = minute;
     if (state.gaps.isEmpty) return;
     state = state.copyWith(
@@ -206,8 +211,9 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
       // gap-fill request covers only the actual missing window. TEMP data
       // from the connected windows between gaps is flushed directly without
       // re-fetching from the controller, minimising controller requests.
-      final rawPeriods =
-          state.gapPeriods.isNotEmpty ? state.gapPeriods : state.gaps;
+      final rawPeriods = state.gapPeriods.isNotEmpty
+          ? state.gapPeriods
+          : state.gaps;
 
       final Map<String, List<GapRange>> byType = {};
       for (final p in rawPeriods) {
@@ -226,20 +232,22 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
       int typeIndex = 0;
       for (final entry in byType.entries) {
         typeIndex++;
-        final type    = entry.key;
-        final label   = _dbTypeLabel(type);
+        final type = entry.key;
+        final label = _dbTypeLabel(type);
         final periods = entry.value;
         for (int i = 0; i < periods.length; i++) {
           final period = periods[i];
           state = state.copyWith(
-            flushStep: 'Fetching $label from controller'
+            flushStep:
+                'Fetching $label from controller'
                 '${periods.length > 1 ? ' (gap ${i + 1}/${periods.length})' : ''}'
                 ' [$typeIndex/$typeCount]',
           );
           final r = await _fillSinglePeriodFromController(type, period);
           summaries.update(type, (s) => s.merge(r), ifAbsent: () => r);
           state = state.copyWith(
-            flushStep: 'Writing $label to database'
+            flushStep:
+                'Writing $label to database'
                 '${periods.length > 1 ? ' (${i + 1}/${periods.length})' : ''}'
                 ' [$typeIndex/$typeCount]',
           );
@@ -294,8 +302,11 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
       // Add one recovery log entry per DB type with the actual record time
       // (earliest record date from the controller) and a details summary.
       const _dbFiles = {
-        'meter': 'meter.db', 'optime': 'optime.db', 'trend': 'trend.db',
-        'ppd': 'ppd.db', 'history': 'history.db',
+        'meter': 'meter.db',
+        'optime': 'optime.db',
+        'trend': 'trend.db',
+        'ppd': 'ppd.db',
+        'history': 'history.db',
       };
       final flushTime = DateTime.now();
       final logEntries = summaries.entries.map((e) {
@@ -315,7 +326,18 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
         ref.read(backupLogProvider.notifier).addEntries(logEntries);
       }
     } catch (e) {
-      print('[Recovery] runFlushNow error: $e');
+      FileLogService().log('[Recovery] runFlushNow error: $e');
+      // suspendRealtime() closed every app.db handle before this failure —
+      // without reopening one, real-time writes have nowhere to land and
+      // backup stays silently dead (even across logout/login) until the
+      // next successful flush. Reopen on whichever DB is still the active
+      // target so real-time can resume; the gap stays pending and will be
+      // retried by the next reconnect / scheduled flush.
+      await _service?.reopenAfterFailedFlush();
+      // Avoid retrying a timed-out controller request every minute after the
+      // scheduled time has passed. Keep the gap visible and schedule the next
+      // automatic attempt; the user can still trigger "Run Now" manually.
+      state = state.copyWith(scheduledAt: _nextOffPeak());
     } finally {
       state = state.copyWith(isFlushing: false, clearFlushStep: true);
     }
@@ -327,17 +349,21 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
   /// (5 min / trend) since no boundary could have been missed in that time.
   /// Results are merged into [summaries] for backup log entry creation.
   Future<void> _catchUpSuspendWindow(
-      DateTime from, DateTime to, Map<String, _GapSummary> summaries) async {
+    DateTime from,
+    DateTime to,
+    Map<String, _GapSummary> summaries,
+  ) async {
     if (_service == null) return;
     if (to.difference(from) < const Duration(minutes: 5)) return;
     FileLogService().log(
-        '[Recovery] Catch-up suspend window: $from → $to '
-        '(${to.difference(from).inMinutes} min)');
+      '[Recovery] Catch-up suspend window: $from → $to '
+      '(${to.difference(from).inMinutes} min)',
+    );
     const dbMap = {
-      'trend':   'trend.db',
-      'meter':   'meter.db',
-      'optime':  'optime.db',
-      'ppd':     'ppd.db',
+      'trend': 'trend.db',
+      'meter': 'meter.db',
+      'optime': 'optime.db',
+      'ppd': 'ppd.db',
       'history': 'history.db',
     };
     for (final entry in dbMap.entries) {
@@ -348,70 +374,94 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
       // is not re-requested.  DBs without a UNIQUE(date, id) constraint (e.g.
       // trend) would otherwise receive duplicate rows for that boundary.
       final catchUpFrom = (interval != null && interval.inMinutes < 60)
-          ? _prevBoundary(from, interval.inMinutes).add(interval)
+          ? previousWriteBoundary(from, interval.inMinutes).add(interval)
           : from;
       if (!catchUpFrom.isBefore(to)) continue;
       final r = await _fillSinglePeriodFromController(
-          entry.key, GapRange(dbFile: dbFile, start: catchUpFrom, end: to));
+        entry.key,
+        GapRange(dbFile: dbFile, start: catchUpFrom, end: to),
+      );
       summaries.update(entry.key, (s) => s.merge(r), ifAbsent: () => r);
     }
   }
 
   static String _dbTypeLabel(String type) => switch (type) {
-    'meter'   => 'Energy Metering',
-    'optime'  => 'Operation Time',
-    'ppd'     => 'PPD Data',
-    'trend'   => 'Trend Data',
+    'meter' => 'Energy Metering',
+    'optime' => 'Operation Time',
+    'ppd' => 'PPD Data',
+    'trend' => 'Trend Data',
     'history' => 'Operation History',
-    _         => type,
+    _ => type,
   };
 
   /// Fetches a single discrete gap [period] for [type] from the controller,
   /// writes the result directly into MAIN DB, and returns a [_GapSummary]
   /// with the record count and date span of the received data.
   Future<_GapSummary> _fillSinglePeriodFromController(
-      String type, GapRange period) async {
-    final dbFile   = period.dbFile;
+    String type,
+    GapRange period,
+  ) async {
+    final dbFile = period.dbFile;
     final interval = kDbWriteIntervals[dbFile];
-    final rawFrom  = period.start;
-    final from = (interval != null && interval.inMinutes < 60)
-        ? _prevBoundary(rawFrom, interval.inMinutes)
-        : rawFrom;
-    // Controller dbBackup uses an exclusive upper bound, so without extending
-    // by one interval the timestamp at period.end (= reconnect time) would be
-    // absent from the response. That causes the first post-reconnect TEMP write
-    // (often inflated for meter, or lost entirely for trend) to slip into MAIN.
-    // History is event-based so we don't extend it.
-    final to = (interval != null && interval.inMinutes < 60)
-        ? period.end.add(interval)
-        : period.end;
+    final rawFrom = period.start;
+
+    // History is event-based: request the full day from midnight of the gap
+    // start until now, then delete+replace that range in MAIN DB so partial
+    // day records (written before the disconnect) are removed and the complete
+    // controller data is re-inserted cleanly.
+    final bool isHistory = type == 'history';
+    final DateTime from;
+    final DateTime to;
+    if (isHistory) {
+      from = DateTime(rawFrom.year, rawFrom.month, rawFrom.day);
+      to = DateTime.now();
+    } else {
+      if (interval != null && interval.inMinutes < 60) {
+        final window = intervalRecoveryWindow(
+          dbType: type,
+          gapStart: rawFrom,
+          gapEnd: period.end,
+          intervalMinutes: interval.inMinutes,
+        );
+        from = window.from;
+        to = window.to;
+      } else {
+        from = rawFrom;
+        to = period.end;
+      }
+    }
 
     FileLogService().log('[Recovery] Gap-fill: requesting $type  $from → $to');
 
     final cmd = BackupDbAccess();
-    final ok  = cmd.dbBackup(type, from, to);
+    final ok = cmd.dbBackup(type, from, to);
     if (!ok) {
-      FileLogService().log('[Recovery] Gap-fill: dbBackup() rejected for $type (locked?)');
-      return const _GapSummary(count: 0);
+      final error = RecoveryDataUnavailableException(
+        '$type recovery request was rejected',
+      );
+      FileLogService().log('[Recovery] Gap-fill: $error');
+      throw error;
     }
 
     final completer = Completer<List<dynamic>?>();
-    final sub = ref.listen<Map<String, dynamic>?>(
-      communicationProvider(cmd),
-      (_, data) {
-        if (data != null && !completer.isCompleted) {
-          final records = data['data'];
-          completer.complete(
-              records is List ? List<dynamic>.from(records) : null);
-        }
-      },
-    );
-    app.requestController(cmd);
-
+    final sub = ref.listen<Map<String, dynamic>?>(communicationProvider(cmd), (
+      _,
+      data,
+    ) {
+      if (data != null && !completer.isCompleted) {
+        final records = data['data'];
+        completer.complete(
+          records is List ? List<dynamic>.from(records) : null,
+        );
+      }
+    });
     try {
-      final records =
-          await completer.future.timeout(const Duration(seconds: 120));
-      if (records != null && records.isNotEmpty) {
+      app.requestController(cmd);
+      final response = await completer.future.timeout(
+        const Duration(seconds: 120),
+      );
+      final records = requireRecoveryRecords(dbType: type, records: response);
+      if (records.isNotEmpty) {
         // Log the date span the controller actually returned so a short gap-fill
         // (records dropped/missing) is visible without re-querying the DB.
         final rawDates = records
@@ -421,33 +471,55 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
         final span = rawDates.isEmpty
             ? 'n/a'
             : '${rawDates.reduce((a, b) => (a as Comparable).compareTo(b) <= 0 ? a : b)}'
-                '..${rawDates.reduce((a, b) => (a as Comparable).compareTo(b) >= 0 ? a : b)}';
+                  '..${rawDates.reduce((a, b) => (a as Comparable).compareTo(b) >= 0 ? a : b)}';
         FileLogService().log(
-            '[Recovery] Gap-fill: $type received ${records.length} record(s), date span $span');
-        await _service!.fillGapInMainDb(type, records);
+          '[Recovery] Gap-fill: $type received ${records.length} record(s), date span $span',
+        );
+        await _service!.fillGapInMainDb(
+          type,
+          records,
+          deleteFrom: isHistory ? from : null,
+        );
 
         // Convert min/max DB int dates to DateTime for the backup log entry.
         final dateTimes = rawDates
             .map((v) => _dbIntToDateTime(v is int ? v : null))
             .whereType<DateTime>()
             .toList();
-        final first = dateTimes.isEmpty ? null
+        final first = dateTimes.isEmpty
+            ? null
             : dateTimes.reduce((a, b) => a.isBefore(b) ? a : b);
-        final last = dateTimes.isEmpty ? null
+        final last = dateTimes.isEmpty
+            ? null
             : dateTimes.reduce((a, b) => a.isAfter(b) ? a : b);
         return _GapSummary(
-            count: records.length, first: first, last: last,
-            rawRecords: records);
+          count: records.length,
+          first: first,
+          last: last,
+          rawRecords: records,
+        );
       } else {
-        FileLogService().log('[Recovery] Gap-fill: no records for $type $from → $to');
+        // Only event-based history is allowed to complete with no records.
+        FileLogService().log(
+          '[Recovery] Gap-fill: no records for $type $from → $to',
+        );
         return const _GapSummary(count: 0);
       }
-    } on TimeoutException {
-      FileLogService().log('[Recovery] Gap-fill: timeout for $type');
-      return const _GapSummary(count: 0);
+    } on TimeoutException catch (e) {
+      final error = RecoveryDataUnavailableException(
+        '$type recovery timed out after 120 seconds',
+      );
+      FileLogService().log('[Recovery] Gap-fill: $error ($e)');
+      throw error;
+    } on RecoveryDataUnavailableException catch (e) {
+      FileLogService().log('[Recovery] Gap-fill: $e');
+      rethrow;
     } catch (e) {
-      FileLogService().log('[Recovery] Gap-fill: error for $type: $e');
-      return const _GapSummary(count: 0);
+      final error = RecoveryDataUnavailableException(
+        '$type recovery failed: $e',
+      );
+      FileLogService().log('[Recovery] Gap-fill: $error');
+      throw error;
     } finally {
       sub.close();
     }
@@ -456,31 +528,19 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
   /// Converts a 12-digit DB integer (YYYYMMDDHHmm) to [DateTime].
   static DateTime? _dbIntToDateTime(int? v) {
     if (v == null || v <= 0) return null;
-    final year   = v ~/ 100000000;
-    final rest   = v %  100000000;
-    final month  = rest ~/ 1000000;
-    final rest2  = rest %  1000000;
-    final day    = rest2 ~/ 10000;
-    final rest3  = rest2 %  10000;
-    final hour   = rest3 ~/ 100;
-    final minute = rest3 %  100;
+    final year = v ~/ 100000000;
+    final rest = v % 100000000;
+    final month = rest ~/ 1000000;
+    final rest2 = rest % 1000000;
+    final day = rest2 ~/ 10000;
+    final rest3 = rest2 % 10000;
+    final hour = rest3 ~/ 100;
+    final minute = rest3 % 100;
     return DateTime(year, month, day, hour, minute);
   }
 
-  DateTime _nextOffPeak() =>
-      RecoveryService.nextOffPeakTime(hour: _recoveryHour, minute: _recoveryMinute);
-
-  /// Returns the latest clock boundary ≤ [from] that is a multiple of
-  /// [intervalMin] minutes from midnight.
-  ///
-  /// Examples (intervalMin=15):
-  ///   14:09 → 14:00
-  ///   14:00 → 14:00   (already on boundary)
-  ///   14:01 → 14:00
-  static DateTime _prevBoundary(DateTime from, int intervalMin) {
-    final minsFromMidnight = from.hour * 60 + from.minute;
-    final prevMins = (minsFromMidnight ~/ intervalMin) * intervalMin;
-    return DateTime(from.year, from.month, from.day,
-        prevMins ~/ 60, prevMins % 60);
-  }
+  DateTime _nextOffPeak() => RecoveryService.nextOffPeakTime(
+    hour: _recoveryHour,
+    minute: _recoveryMinute,
+  );
 }

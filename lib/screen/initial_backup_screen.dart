@@ -128,6 +128,7 @@ class InitialBackupScreen extends ReiriScreen {
                   icon: const Icon(Icons.arrow_forward_rounded),
                   label: const Text('Continue'),
                   style: FilledButton.styleFrom(
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     textStyle: const TextStyle(
                         fontSize: 15, fontWeight: FontWeight.w600),

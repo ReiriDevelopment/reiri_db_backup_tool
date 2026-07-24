@@ -30,28 +30,28 @@ class BackupLogEntry {
   final String? details;
 
   Map<String, dynamic> toJson() => {
-        'timestamp': timestamp.toIso8601String(),
-        'backedUpAt': backedUpAt?.toIso8601String(),
-        'type': type.name,
-        'result': result.name,
-        'database': database,
-        if (details != null) 'details': details,
-      };
+    'timestamp': timestamp.toIso8601String(),
+    'backedUpAt': backedUpAt?.toIso8601String(),
+    'type': type.name,
+    'result': result.name,
+    'database': database,
+    if (details != null) 'details': details,
+  };
 
   factory BackupLogEntry.fromJson(Map<String, dynamic> json) => BackupLogEntry(
-        timestamp: DateTime.parse(json['timestamp'] as String),
-        backedUpAt: json['backedUpAt'] != null
-            ? DateTime.parse(json['backedUpAt'] as String)
-            : null,
-        type: BackupLogType.values.firstWhere(
-          (e) => e.name == json['type'],
-          orElse: () => BackupLogType.realtime,
-        ),
-        result: BackupLogResult.values.firstWhere(
-          (e) => e.name == json['result'],
-          orElse: () => BackupLogResult.success,
-        ),
-        database: json['database'] as String? ?? '',
-        details: json['details'] as String?,
-      );
+    timestamp: DateTime.parse(json['timestamp'] as String),
+    backedUpAt: json['backedUpAt'] != null
+        ? DateTime.parse(json['backedUpAt'] as String)
+        : null,
+    type: BackupLogType.values.firstWhere(
+      (e) => e.name == json['type'],
+      orElse: () => BackupLogType.realtime,
+    ),
+    result: BackupLogResult.values.firstWhere(
+      (e) => e.name == json['result'],
+      orElse: () => BackupLogResult.success,
+    ),
+    database: json['database'] as String? ?? '',
+    details: json['details'] as String?,
+  );
 }

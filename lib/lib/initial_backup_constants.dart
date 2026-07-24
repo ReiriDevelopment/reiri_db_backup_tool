@@ -14,6 +14,7 @@ const String kTempDbFolderName = 'DB_TEMP';
 const String kInitialBackupDoneKey = 'INITIAL_HISTORY_BACKUP_DONE_V1';
 const String kBackupRootPathKey = 'BACKUP_ROOT_PATH_V1';
 const String kRecoveryTimeKey = 'RECOVERY_SCHEDULE_TIME_V1';
+const String kInstantFillKey = 'RECOVERY_MODE_INSTANT_V1';
 
 /// Default recovery flush time: 03:00.
 const ({int hour, int minute}) kDefaultRecoveryTime = (hour: 3, minute: 0);
@@ -50,6 +51,19 @@ Future<({int hour, int minute})> loadRecoveryTime() async {
     );
   } catch (_) {
     return kDefaultRecoveryTime;
+  }
+}
+
+Future<void> storeInstantFill(bool value) async {
+  await app.storeJson(kInstantFillKey, {'instant': value});
+}
+
+Future<bool> loadInstantFill() async {
+  try {
+    final info = await app.loadJson(kInstantFillKey);
+    return info['instant'] as bool? ?? false;
+  } catch (_) {
+    return false;
   }
 }
 

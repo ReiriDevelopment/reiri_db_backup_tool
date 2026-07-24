@@ -2,10 +2,10 @@
 /// Used to determine whether any records were missed during a disconnect gap.
 const Map<String, Duration> kDbWriteIntervals = {
   'history.db': Duration(hours: 24), // event-based; 24h conservative threshold
-  'meter.db':   Duration(minutes: 15),
-  'optime.db':  Duration(minutes: 15),
-  'ppd.db':     Duration(minutes: 15),
-  'trend.db':   Duration(minutes: 5),
+  'meter.db': Duration(minutes: 15),
+  'optime.db': Duration(minutes: 15),
+  'ppd.db': Duration(minutes: 15),
+  'trend.db': Duration(minutes: 5),
 };
 
 /// A detected gap for a single DB file.
@@ -37,9 +37,9 @@ class GapRange {
 
 /// Where real-time backup is currently writing.
 enum BackupState {
-  idle,           // not yet connected / no gap
-  realtimeTemp,   // gap detected — real-time writes go to TEMP DB
-  realtimeMain,   // no gap (or flush done) — real-time writes go to MAIN DB
+  idle, // not yet connected / no gap
+  realtimeTemp, // gap detected — real-time writes go to TEMP DB
+  realtimeMain, // no gap (or flush done) — real-time writes go to MAIN DB
 }
 
 /// Progress of the TEMP → MAIN flush operation.
@@ -47,8 +47,18 @@ enum FlushStatus { none, pending, inProgress, completed }
 
 /// Persisted state that survives app crashes (stored in backup_metadata.json).
 class BackupMetadata {
-  /// When the last connection dropped (or the app closed).
+  /// Earliest known start of the current disconnect window.
+  ///
+  /// Once set, this value must not move forward until the next connection
+  /// consumes
+  /// it.  Older app versions also used this field as a rolling heartbeat; the
+  /// loader keeps accepting that representation for backwards compatibility.
   final DateTime? disconnectedAt;
+
+  /// Most recent time the controller was confirmed reachable while real-time
+  /// backup was healthy. Kept separate from [disconnectedAt] so a delayed
+  /// WebSocket disconnect, logout, or widget disposal cannot erase a real gap.
+  final DateTime? lastHealthyAt;
 
   /// When the app most recently connected to the controller.
   final DateTime? tConnect;
@@ -75,6 +85,7 @@ class BackupMetadata {
 
   const BackupMetadata({
     this.disconnectedAt,
+    this.lastHealthyAt,
     this.tConnect,
     this.backupState = BackupState.idle,
     this.flushStatus = FlushStatus.none,
@@ -86,6 +97,7 @@ class BackupMetadata {
 
   BackupMetadata copyWith({
     DateTime? disconnectedAt,
+    DateTime? lastHealthyAt,
     DateTime? tConnect,
     BackupState? backupState,
     FlushStatus? flushStatus,
@@ -93,6 +105,7 @@ class BackupMetadata {
     List<GapRange>? gapPeriods,
     String? tempDbPath,
     bool clearDisconnectedAt = false,
+    bool clearLastHealthyAt = false,
     bool clearTConnect = false,
     bool clearTempDbPath = false,
     bool? autoFill,
@@ -101,6 +114,9 @@ class BackupMetadata {
       disconnectedAt: clearDisconnectedAt
           ? null
           : (disconnectedAt ?? this.disconnectedAt),
+      lastHealthyAt: clearLastHealthyAt
+          ? null
+          : (lastHealthyAt ?? this.lastHealthyAt),
       tConnect: clearTConnect ? null : (tConnect ?? this.tConnect),
       backupState: backupState ?? this.backupState,
       flushStatus: flushStatus ?? this.flushStatus,
@@ -113,6 +129,7 @@ class BackupMetadata {
 
   Map<String, dynamic> toJson() => {
     'disconnectedAt': disconnectedAt?.toIso8601String(),
+    'lastHealthyAt': lastHealthyAt?.toIso8601String(),
     'tConnect': tConnect?.toIso8601String(),
     'backupState': backupState.name,
     'flushStatus': flushStatus.name,
@@ -125,6 +142,9 @@ class BackupMetadata {
   factory BackupMetadata.fromJson(Map<String, dynamic> j) => BackupMetadata(
     disconnectedAt: j['disconnectedAt'] != null
         ? DateTime.parse(j['disconnectedAt'] as String)
+        : null,
+    lastHealthyAt: j['lastHealthyAt'] != null
+        ? DateTime.parse(j['lastHealthyAt'] as String)
         : null,
     tConnect: j['tConnect'] != null
         ? DateTime.parse(j['tConnect'] as String)

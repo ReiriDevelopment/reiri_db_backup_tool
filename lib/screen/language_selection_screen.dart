@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_db_backup_tool/screen/controller_selection_screen.dart';
 import 'package:reiri_db_backup_tool/widget/radio_menu_list.dart';
-import 'package:std_widget/std_widget.dart';
+import 'package:std_widget/selector.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
 class LanguageSelectionScreen extends ConsumerWidget {

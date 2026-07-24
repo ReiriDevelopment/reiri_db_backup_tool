@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/provider/recovery_provider.dart';
-import 'package:reiri_db_backup_tool/screen/gap_fill_test_screen.dart';
 
 class RecoveryView extends ConsumerWidget {
   const RecoveryView({super.key});
@@ -48,27 +47,6 @@ class RecoveryView extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const GapFillTestScreen(),
-                    ),
-                  ),
-                  icon: const Icon(Icons.science_outlined, size: 15),
-                  label: const Text('Test Gap Fill'),
-                  style:
-                      OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: Colors.purple.shade600,
-                        side: BorderSide(color: Colors.purple.shade300),
-                      ).copyWith(
-                        mouseCursor: const WidgetStatePropertyAll(
-                          SystemMouseCursors.click,
-                        ),
-                      ),
-                ),
-                const SizedBox(width: 8),
                 _ScanButton(state: state),
               ],
             ),
@@ -291,7 +269,7 @@ class _GapRow extends StatelessWidget {
       durationLabel = '${dur.inHours}h ${dur.inMinutes.remainder(60)}m';
       chipColor = Colors.amber.shade700;
     } else {
-      durationLabel = '${dur.inMinutes}m';
+      durationLabel = dur.inMinutes == 0 ? '<1m' : '${dur.inMinutes}m';
       chipColor = Colors.amber.shade700;
     }
 

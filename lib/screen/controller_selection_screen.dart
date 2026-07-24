@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_db_backup_tool/lib/app_constant.dart';
 import 'package:reiri_db_backup_tool/screen/login_screen.dart';
 import 'package:reiri_db_backup_tool/screen/qr_scan_screen.dart';
-import 'package:std_widget/std_widget.dart';
+import 'package:std_widget/reiri_icons.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'reiri_screen.dart';
 

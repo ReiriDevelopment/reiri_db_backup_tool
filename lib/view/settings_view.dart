@@ -28,6 +28,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   bool? _launchOnStartup;   // null = still loading from registry
   bool _autoLogin = false;
   ({int hour, int minute})? _recoveryTime;  // null = still loading from disk
+  bool? _instantFill;                       // null = still loading from disk
 
   static const _regValueName = 'ReiriBackup';
   static const _regKey =
@@ -39,11 +40,17 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     _autoLogin = app.autoLogin;
     _checkStartupRegistry();
     _loadRecoveryTime();
+    _loadInstantFill();
   }
 
   Future<void> _loadRecoveryTime() async {
     final t = await loadRecoveryTime();
     if (mounted) setState(() => _recoveryTime = (hour: t.hour, minute: t.minute));
+  }
+
+  Future<void> _loadInstantFill() async {
+    final v = await loadInstantFill();
+    if (mounted) setState(() => _instantFill = v);
   }
 
   Future<void> _checkStartupRegistry() async {
@@ -272,12 +279,54 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                       ),
                     ),
                     _SettingsDivider(),
+                    // ── Recovery Mode ────────────────────────────────────────
+                    _SettingsTile(
+                      title: 'Recovery Mode',
+                      subtitle: 'Fill missing data immediately on reconnect, or at a scheduled time',
+                      trailing: _instantFill == null
+                          ? const SizedBox(
+                              width: 51, height: 31,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            )
+                          : SegmentedButton<bool>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: true,
+                                  label: Text('Immediate'),
+                                  icon: Icon(Icons.flash_on_rounded, size: 14),
+                                ),
+                                ButtonSegment(
+                                  value: false,
+                                  label: Text('Scheduled'),
+                                  icon: Icon(Icons.schedule_rounded, size: 14),
+                                ),
+                              ],
+                              selected: {_instantFill!},
+                              style: ButtonStyle(
+                                visualDensity: VisualDensity.compact,
+                                mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
+                              ),
+                              onSelectionChanged: (s) async {
+                                final val = s.first;
+                                setState(() => _instantFill = val);
+                                await storeInstantFill(val);
+                              },
+                            ),
+                    ),
+                    _SettingsDivider(),
                     // ── Recovery Schedule Time ───────────────────────────────
                     _SettingsTile(
                       title: 'Recovery Schedule Time',
-                      subtitle: 'Daily time to merge gap recovery data into backup',
+                      subtitle: _instantFill == true
+                          ? 'Not used — immediate mode is active'
+                          : 'Daily time to merge gap recovery data into backup',
                       trailing: OutlinedButton(
-                        onPressed: _recoveryTime == null
+                        onPressed: (_recoveryTime == null || _instantFill == true)
                             ? null
                             : () => _pickRecoveryTime(context),
                         style: OutlinedButton.styleFrom(
@@ -307,7 +356,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   icon: const Icon(Icons.logout_rounded, size: 16),
                   label: const Text('Logout'),
                   style: FilledButton.styleFrom(
-                      backgroundColor: Colors.red.shade600).copyWith(
+                      backgroundColor: Colors.red.shade600,
+                      foregroundColor: Colors.white).copyWith(
                     mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
                   ),
                 ),

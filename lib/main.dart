@@ -44,14 +44,11 @@ void main() async {
       title: 'Reiri DB Backup Tool',
       minimumSize: Size(800, 600),
       center: true,
-      backgroundColor: Colors.transparent,
       skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.normal,
     );
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.focus();
-    });
+    await windowManager.waitUntilReadyToShow(windowOptions);
+    await windowManager.show();
+    await windowManager.focus();
 
     HttpOverrides.global = MyHttpOverrides();
     runApp(ProviderScope(child: App()));
@@ -109,7 +106,15 @@ class _AppState extends ConsumerState<App> with WindowListener {
     await windowManager.focus();
   }
 
+  /// Only prompt to keep backup running once the user is actually logged in
+  /// and backing up — before that there is nothing running worth protecting.
+  bool get _isLoggedIn => ref.read(connectionProvider)?['state'] == 'ready';
+
   void _onExitFromTray() {
+    if (!_isLoggedIn) {
+      windowManager.destroy();
+      return;
+    }
     final ctx = _navigatorKey.currentContext;
     if (ctx == null) {
       windowManager.destroy();
@@ -120,6 +125,10 @@ class _AppState extends ConsumerState<App> with WindowListener {
 
   @override
   void onWindowClose() {
+    if (!_isLoggedIn) {
+      windowManager.destroy();
+      return;
+    }
     final ctx = _navigatorKey.currentContext;
     if (ctx == null) {
       windowManager.destroy();
@@ -152,7 +161,8 @@ class _AppState extends ConsumerState<App> with WindowListener {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: Colors.red.shade600),
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white),
             onPressed: () async {
               Navigator.pop(ctx);
               TrayService.instance.dispose();
@@ -188,6 +198,8 @@ class _AppState extends ConsumerState<App> with WindowListener {
       _ => ThemeMode.system,
     };
 
+    final lightScheme = app.lightScheme();
+
     return MaterialApp(
       title: 'Reiri',
       debugShowCheckedModeBanner: false,
@@ -211,12 +223,35 @@ class _AppState extends ConsumerState<App> with WindowListener {
         Locale('ja', 'JP'),
       ],
       theme: ThemeData(
-        colorScheme: app.lightScheme(),
+        colorScheme: lightScheme,
         scaffoldBackgroundColor: Colors.white,
         fontFamily: 'Poppins',
         checkboxTheme: CheckboxThemeData(
           checkColor: WidgetStateProperty.all(Colors.white),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        ),
+        switchTheme: SwitchThemeData(
+          thumbColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? Colors.white
+                  : Colors.grey.shade50),
+          trackColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? lightScheme.primary
+                  : Colors.grey.shade300),
+          trackOutlineColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.selected)
+                  ? Colors.transparent
+                  : Colors.grey.shade400),
+        ),
+        segmentedButtonTheme: SegmentedButtonThemeData(
+          style: SegmentedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.grey.shade700,
+            selectedForegroundColor: Colors.white,
+            selectedBackgroundColor: lightScheme.primary,
+            side: BorderSide(color: Colors.grey.shade300),
+          ),
         ),
       ),
       darkTheme: ThemeData(

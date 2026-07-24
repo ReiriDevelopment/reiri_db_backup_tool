@@ -5,7 +5,8 @@ import 'package:reiri_db_backup_tool/screen/home_screen.dart';
 import 'package:reiri_db_backup_tool/screen/initial_backup_screen.dart';
 import 'package:reiri_db_backup_tool/screen/reiri_screen.dart';
 import 'package:reiri_db_backup_tool/screen/terms_conditions_screen.dart';
-import 'package:std_widget/std_widget.dart';
+import 'package:reiri_db_backup_tool/widget/reiri_text_input.dart';
+import 'package:std_widget/selector.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'controller_selection_screen.dart';
 
@@ -14,8 +15,8 @@ class LoginScreen extends ReiriScreen {
   // these 2 variable store user input of user name and password
   String? _user;
   String? _passwd;
-  TextInput userInput = TextInput();
-  TextInput passwdInput = TextInput();
+  Widget userInput = const SizedBox.shrink();
+  Widget passwdInput = const SizedBox.shrink();
   Map<String, SelectorItem> ctrlSelectable = {};
   bool autoLogin = false;
   Map<String, String?> loginFailReason = {};
@@ -42,16 +43,17 @@ class LoginScreen extends ReiriScreen {
       ctrlSelectable[mac] = SelectorItem(label: info['name']);
     });
     // Username and password input fields
-    userInput = TextInput(
+    userInput = ReiriTextInput(
       width: 200,
       decoration: RDeco().frame,
       padding: EdgeInsets.all(2),
       margin: EdgeInsets.all(2),
       hint: app.word('usrname'),
       text: _user,
+      onChanged: (value) => _user = value,
       onSubmitted: (value) => tryLogin(),
     );
-    passwdInput = TextInput(
+    passwdInput = ReiriTextInput(
       width: 200,
       decoration: RDeco().frame,
       padding: EdgeInsets.all(2),
@@ -59,6 +61,7 @@ class LoginScreen extends ReiriScreen {
       hint: app.word('passwd'),
       text: _passwd,
       passwd: true,
+      onChanged: (value) => _passwd = value,
       onSubmitted: (value) => tryLogin(),
     );
 
@@ -70,7 +73,7 @@ class LoginScreen extends ReiriScreen {
       loginFailReason = next ?? {};
       if (next?['state'] == 'ready') {
         // store login user name and password to controller info
-        app.setLoginAccount(userInput.value ?? '', passwdInput.value ?? '');
+        app.setLoginAccount(_user ?? '', _passwd ?? '');
         hideLoading();
         print('Open Home Screen'); // move to home screen
 
@@ -129,18 +132,39 @@ class LoginScreen extends ReiriScreen {
     return Scaffold(
       body: Column(
         children: [
-          Align(
-            alignment: Alignment.topLeft,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 20, left: 20),
-              child: Image.asset('assets/images/ReiriLogoB.png', width: 100),
-            ),
-          ),
+          // Align(
+          //   alignment: Alignment.topLeft,
+          //   child: Padding(
+          //     padding: const EdgeInsets.only(top: 20, left: 20),
+          //     child: Image.asset('assets/images/ReiriLogoB.png', width: 100),
+          //   ),
+          // ),
           Expanded(
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Reiri ',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 28),
+                        ),
+                        TextSpan(
+                          text: 'DB Backup',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 28),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   loading,
                   Selector(
                     key: ValueKey(selectedMac),
@@ -252,8 +276,8 @@ class LoginScreen extends ReiriScreen {
       msmD: true,
     )) {
       app.login(
-        user: userInput.value ?? '',
-        passwd: passwdInput.value ?? '',
+        user: _user ?? '',
+        passwd: _passwd ?? '',
         cloud: _controller!['cloud'] ?? false,
       );
     } else {

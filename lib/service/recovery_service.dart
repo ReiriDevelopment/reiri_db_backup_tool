@@ -49,17 +49,17 @@ class RecoveryService {
     final prev = _opChain;
     _opChain = completer.future.then((_) {}, onError: (_) {});
     prev.whenComplete(() {
-      action().then(completer.complete).catchError(
-          (Object e, StackTrace s) => completer.completeError(e, s));
+      action()
+          .then(completer.complete)
+          .catchError(
+            (Object e, StackTrace s) => completer.completeError(e, s),
+          );
     });
     return completer.future;
   }
 
   /// Call once after the backup folder and MAC are known.
-  Future<void> init({
-    required String rootPath,
-    required String safeMac,
-  }) async {
+  Future<void> init({required String rootPath, required String safeMac}) async {
     _macDir = '$rootPath\\$safeMac';
     _mainDbDir = '$_macDir\\$kInitialBackupDbFolderName';
     _tempDbDir = '$_macDir\\$kTempDbFolderName';
@@ -85,8 +85,7 @@ class RecoveryService {
   /// Returns only the **newly** detected gaps. The full merged gap list
   /// (including carry-overs from previous sessions) is available via
   /// [metadata.detectedGaps].
-  Future<List<GapRange>> onConnected() =>
-      _synchronized(_onConnectedImpl);
+  Future<List<GapRange>> onConnected() => _synchronized(_onConnectedImpl);
 
   Future<List<GapRange>> _onConnectedImpl() async {
     final tConnect = DateTime.now();
@@ -109,10 +108,12 @@ class RecoveryService {
       await _meta.saveTempPath(_tempDbDir);
       if (wasInTemp) {
         FileLogService().log(
-            '[Recovery] Resuming existing TEMP DB (${allGaps.length} gap(s) pending)');
+          '[Recovery] Resuming existing TEMP DB (${allGaps.length} gap(s) pending)',
+        );
       } else {
         FileLogService().log(
-            '[Recovery] Gap detected (${allGaps.length} DBs affected). Routing real-time → TEMP DB');
+          '[Recovery] Gap detected (${allGaps.length} DBs affected). Routing real-time → TEMP DB',
+        );
       }
     } else {
       // No gap: TEMP staging is not needed, switch straight back to MAIN.
@@ -202,7 +203,9 @@ class RecoveryService {
           if (valueCache[key] == null) valueCache[key] = -1;
         }
       }
-      FileLogService().log('[Recovery] Seeded meter value cache from MAIN ($filled point(s))');
+      FileLogService().log(
+        '[Recovery] Seeded meter value cache from MAIN ($filled point(s))',
+      );
     } catch (e) {
       FileLogService().log('[Recovery] _seedMeterValueCache failed: $e');
     } finally {
@@ -225,12 +228,16 @@ class RecoveryService {
         await tempDb.execute('ATTACH ? AS main_db', [mainPath]);
         await tempDb.transaction((txn) async {
           await txn.execute('DELETE FROM point_id');
-          await txn.execute('INSERT INTO point_id SELECT * FROM main_db.point_id');
+          await txn.execute(
+            'INSERT INTO point_id SELECT * FROM main_db.point_id',
+          );
         });
         await tempDb.execute('DETACH main_db');
         FileLogService().log('[Recovery] Seeded point_id for $type from MAIN');
       } catch (e) {
-        FileLogService().log('[Recovery] _seedPointIdFromMain failed for $type: $e');
+        FileLogService().log(
+          '[Recovery] _seedPointIdFromMain failed for $type: $e',
+        );
       } finally {
         await tempDb.close();
       }
@@ -243,11 +250,18 @@ class RecoveryService {
   /// reopens everything on MAIN when the flush is done.
   Future<void> suspendRealtime() => _synchronized(_closeAllDbs);
 
+  /// Persists a healthy checkpoint without changing an active gap start.
+  Future<void> recordHeartbeat({DateTime? at}) =>
+      _synchronized(() => _meta.recordHeartbeat(at: at));
+
   /// Call when the WebSocket connection drops or the app is about to close.
-  Future<void> onDisconnected() async {
-    await _meta.recordDisconnect();
-    FileLogService().log('[Recovery] Disconnect recorded at ${_meta.current.disconnectedAt}');
-  }
+  /// Repeated calls preserve the earliest known start of the same gap.
+  Future<void> onDisconnected({DateTime? at}) => _synchronized(() async {
+    await _meta.recordDisconnect(at: at);
+    FileLogService().log(
+      '[Recovery] Disconnect recorded at ${_meta.current.disconnectedAt}',
+    );
+  });
 
   /// Closes MAIN DB handles, switches the global SQLite path to TEMP,
   /// opens / initialises all DB files there, and persists the flush state.
@@ -285,17 +299,23 @@ class RecoveryService {
         final tempPath = '$_tempDbDir\\$dbFile';
 
         if (!await File(tempPath).exists()) {
-          FileLogService().log('[Recovery] TEMP file not found, skipping: $dbFile');
+          FileLogService().log(
+            '[Recovery] TEMP file not found, skipping: $dbFile',
+          );
           continue;
         }
         if (!await File(mainPath).exists()) {
-          FileLogService().log('[Recovery] MAIN file not found, skipping: $dbFile');
+          FileLogService().log(
+            '[Recovery] MAIN file not found, skipping: $dbFile',
+          );
           continue;
         }
 
         final dbType = fileToDbType(dbFile);
         if (dbType == null) {
-          FileLogService().log('[Recovery] No flush handler for $dbFile, skipping');
+          FileLogService().log(
+            '[Recovery] No flush handler for $dbFile, skipping',
+          );
           continue;
         }
 
@@ -337,7 +357,11 @@ class RecoveryService {
   ///
   /// `history.db` has no `point_id` surrogate key, so it uses a plain
   /// `INSERT OR IGNORE ... SELECT *` via ATTACH.
-  Future<void> _flushSingleDb(String mainPath, String tempPath, String dbType) async {
+  Future<void> _flushSingleDb(
+    String mainPath,
+    String tempPath,
+    String dbType,
+  ) async {
     await _flushSingleDbWindow(mainPath, tempPath, dbType, null, null);
   }
 
@@ -350,8 +374,13 @@ class RecoveryService {
   /// points appeared after TEMP was created (e.g. new equipment added
   /// during a gap window) by inserting them into MAIN first and patching
   /// TEMP's data rows if db_id assignments diverged.
-  Future<void> _flushSingleDbWindow(String mainPath, String tempPath,
-      String dbType, DateTime? from, DateTime? to) async {
+  Future<void> _flushSingleDbWindow(
+    String mainPath,
+    String tempPath,
+    String dbType,
+    DateTime? from,
+    DateTime? to,
+  ) async {
     if (dbType == 'history') {
       await _flushHistoryDb(mainPath, tempPath, from: from, to: to);
       return;
@@ -388,11 +417,35 @@ class RecoveryService {
           );
           if (schema.isNotEmpty) {
             await db.execute(
-              (schema.first['sql'] as String)
-                  .replaceFirst('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS'),
+              (schema.first['sql'] as String).replaceFirst(
+                'CREATE TABLE',
+                'CREATE TABLE IF NOT EXISTS',
+              ),
             );
           }
         }
+      }
+
+      // Controller-downloaded Trend tables do not carry the UNIQUE(date, id)
+      // constraint used by tables created locally. Without an equivalent
+      // index, the NOT EXISTS check below scans the full MAIN table once for
+      // every TEMP row. Add a non-unique index so existing duplicates remain
+      // valid while recovery lookups become indexed.
+      if (dbType == 'trend') {
+        final timer = Stopwatch()..start();
+        for (final row in tables) {
+          final tableName = row['name'] as String;
+          final indexName = 'idx_recovery_${tableName}_date_id';
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS "$indexName" '
+            'ON "$tableName" (date, id)',
+          );
+        }
+        timer.stop();
+        FileLogService().log(
+          '[Recovery] Trend (date, id) indexes ready for '
+          '${tables.length} table(s) in ${timer.elapsedMilliseconds}ms',
+        );
       }
 
       await db.transaction((txn) async {
@@ -409,7 +462,7 @@ class RecoveryService {
           // standard INSERT OR IGNORE cannot deduplicate without this check.
           final conditions = <String>[
             if (from != null) 't.date >= ${_toDbInt(from)}',
-            if (to != null)   't.date < ${_toDbInt(to)}',
+            if (to != null) 't.date < ${_toDbInt(to)}',
             'NOT EXISTS (SELECT 1 FROM "$tableName" m'
                 ' WHERE m.date = t.date AND m.id = t.id)',
           ];
@@ -426,7 +479,8 @@ class RecoveryService {
 
       await db.execute('DETACH temp_db');
       FileLogService().log(
-          '[Recovery] Flushed "$dbType" [${from ?? "start"}, ${to ?? "end"}] (direct copy)');
+        '[Recovery] Flushed "$dbType" [${from ?? "start"}, ${to ?? "end"}] (direct copy)',
+      );
     } finally {
       await db.close();
     }
@@ -438,7 +492,10 @@ class RecoveryService {
   /// different order).  A no-op when all TEMP points already exist in MAIN
   /// (the common case after seeding at TEMP creation).
   Future<void> _syncNewPointsInTemp(
-      String mainPath, String tempPath, String dbType) async {
+    String mainPath,
+    String tempPath,
+    String dbType,
+  ) async {
     final mainDb = await databaseFactoryFfi.openDatabase(
       mainPath,
       options: OpenDatabaseOptions(singleInstance: false),
@@ -460,7 +517,7 @@ class RecoveryService {
 
       // Insert new points into MAIN — trend point_id also has a `type` column.
       final cols = dbType == 'trend' ? '(id, type)' : '(id)';
-      final sel  = dbType == 'trend' ? 't.id, t.type' : 't.id';
+      final sel = dbType == 'trend' ? 't.id, t.type' : 't.id';
       await mainDb.execute(
         'INSERT OR IGNORE INTO point_id $cols '
         'SELECT $sel FROM temp_db.point_id t '
@@ -471,9 +528,11 @@ class RecoveryService {
       final remap = <int, int>{}; // temp_db_id → main_db_id
       for (final p in newRows) {
         final tempId = p['temp_id'] as int;
-        final strId  = p['str_id']  as String;
+        final strId = p['str_id'] as String;
         final r = await mainDb.rawQuery(
-          'SELECT db_id FROM point_id WHERE id=?', [strId]);
+          'SELECT db_id FROM point_id WHERE id=?',
+          [strId],
+        );
         if (r.isNotEmpty) {
           final mainId = r.first['db_id'] as int;
           if (mainId != tempId) remap[tempId] = mainId;
@@ -483,7 +542,9 @@ class RecoveryService {
       await mainDb.execute('DETACH temp_db');
 
       if (remap.isEmpty) {
-        FileLogService().log('[Recovery] Synced ${newRows.length} new point(s) for $dbType (no db_id conflict)');
+        FileLogService().log(
+          '[Recovery] Synced ${newRows.length} new point(s) for $dbType (no db_id conflict)',
+        );
         return;
       }
 
@@ -501,25 +562,29 @@ class RecoveryService {
           for (final row in tables) {
             final tableName = row['name'] as String;
             for (final entry in remap.entries) {
-              await txn.execute(
-                'UPDATE "$tableName" SET id=? WHERE id=?',
-                [entry.value, entry.key],
-              );
+              await txn.execute('UPDATE "$tableName" SET id=? WHERE id=?', [
+                entry.value,
+                entry.key,
+              ]);
             }
           }
           for (final entry in remap.entries) {
-            await txn.execute(
-              'UPDATE point_id SET db_id=? WHERE db_id=?',
-              [entry.value, entry.key],
-            );
+            await txn.execute('UPDATE point_id SET db_id=? WHERE db_id=?', [
+              entry.value,
+              entry.key,
+            ]);
           }
         });
-        FileLogService().log('[Recovery] Synced ${newRows.length} new point(s) for $dbType (remapped ${remap.length} db_id conflict(s))');
+        FileLogService().log(
+          '[Recovery] Synced ${newRows.length} new point(s) for $dbType (remapped ${remap.length} db_id conflict(s))',
+        );
       } finally {
         await tempDb.close();
       }
     } catch (e) {
-      FileLogService().log('[Recovery] _syncNewPointsInTemp failed for $dbType: $e');
+      FileLogService().log(
+        '[Recovery] _syncNewPointsInTemp failed for $dbType: $e',
+      );
     } finally {
       await mainDb.close();
     }
@@ -530,12 +595,30 @@ class RecoveryService {
   /// each gap-fill period so rows land in MAIN in chronological order.
   /// Pass [to]=null to flush from [from] to the end of TEMP (last window).
   Future<void> flushTempWindowToMain(
-      String dbType, DateTime? from, DateTime? to) => _synchronized(() async {
+    String dbType,
+    DateTime? from,
+    DateTime? to,
+  ) => _synchronized(() async {
     final dbFile = _dbTypeToFile(dbType);
     final mainPath = '$_mainDbDir\\$dbFile';
     final tempPath = '$_tempDbDir\\$dbFile';
-    if (!await File(tempPath).exists() || !await File(mainPath).exists()) return;
+    if (!await File(tempPath).exists() || !await File(mainPath).exists())
+      return;
     await _flushSingleDbWindow(mainPath, tempPath, dbType, from, to);
+  });
+
+  /// Reopens [app.db] on whichever directory is currently the active target
+  /// (TEMP if the gap is still unresolved, otherwise MAIN). Call this if a
+  /// flush attempt throws after [suspendRealtime] closed all handles but
+  /// before [finalizeFlushedCleanup] could reopen them — otherwise real-time
+  /// writes have nowhere to land and backup silently stops until the app is
+  /// restarted (or forever, if metadata never records the flush as stuck).
+  Future<void> reopenAfterFailedFlush() => _synchronized(() async {
+    await app.setDbPath(hasActiveGap ? _tempDbDir : _mainDbDir);
+    await _openAllDbs();
+    FileLogService().log(
+      '[Recovery] Reopened DB after failed flush → ${hasActiveGap ? "TEMP" : "MAIN"}',
+    );
   });
 
   /// Marks flush completed, switches to MAIN DB, and deletes the TEMP folder.
@@ -562,8 +645,12 @@ class RecoveryService {
   /// UNIQUE constraint (used by INSERT OR IGNORE) includes `data`, so it
   /// would let both variants through.  COALESCE in the NOT EXISTS clause also
   /// matches against any pre-existing NULL-com rows in MAIN.
-  Future<void> _flushHistoryDb(String mainPath, String tempPath,
-      {DateTime? from, DateTime? to}) async {
+  Future<void> _flushHistoryDb(
+    String mainPath,
+    String tempPath, {
+    DateTime? from,
+    DateTime? to,
+  }) async {
     final tempDb = await databaseFactoryFfi.openDatabase(
       tempPath,
       options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
@@ -592,8 +679,10 @@ class RecoveryService {
           );
           if (schema.isNotEmpty) {
             await db.execute(
-              (schema.first['sql'] as String)
-                  .replaceFirst('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS'),
+              (schema.first['sql'] as String).replaceFirst(
+                'CREATE TABLE',
+                'CREATE TABLE IF NOT EXISTS',
+              ),
             );
           }
         }
@@ -613,8 +702,8 @@ class RecoveryService {
           for (final row in rows) {
             final date = row['date'];
             final type = _normalizeHistoryField(row['type']);
-            final com  = _normalizeHistoryField(row['com']);
-            final id   = _normalizeHistoryField(row['id']);
+            final com = _normalizeHistoryField(row['com']);
+            final id = _normalizeHistoryField(row['id']);
             final data = _normalizeHistoryData(row['data']);
             // COALESCE handles existing NULL-com rows in MAIN so they are
             // matched by the normalised '' com value.
@@ -627,15 +716,15 @@ class RecoveryService {
               final who = _normalizeHistoryField(row['who']);
               await txn.execute(
                 'INSERT INTO "$tableName" (date, type, com, id, data, who)'
-                ' SELECT ?, ?, ?, ?, ?, ?'
-                + notExists.replaceAll('{t}', tableName),
+                        ' SELECT ?, ?, ?, ?, ?, ?' +
+                    notExists.replaceAll('{t}', tableName),
                 [date, type, com, id, data, who, date, type, com, id],
               );
             } else {
               await txn.execute(
                 'INSERT INTO "$tableName" (date, type, com, id, data)'
-                ' SELECT ?, ?, ?, ?, ?'
-                + notExists.replaceAll('{t}', tableName),
+                        ' SELECT ?, ?, ?, ?, ?' +
+                    notExists.replaceAll('{t}', tableName),
                 [date, type, com, id, data, date, type, com, id],
               );
             }
@@ -653,8 +742,11 @@ class RecoveryService {
 
   /// Converts [DateTime] to the YYYYMMDDHHmm integer used in DB date columns.
   static int _toDbInt(DateTime dt) =>
-      dt.year * 100000000 + dt.month * 1000000 + dt.day * 10000 +
-      dt.hour * 100 + dt.minute;
+      dt.year * 100000000 +
+      dt.month * 1000000 +
+      dt.day * 10000 +
+      dt.hour * 100 +
+      dt.minute;
 
   /// Builds a SQL WHERE fragment for an integer date column, e.g.
   /// `col >= 202606150900 AND col < 202606151500`.
@@ -679,16 +771,26 @@ class RecoveryService {
   /// MAIN DB for [dbType].  Opens a dedicated SQLite connection by absolute
   /// path so it does not interfere with [app.db], which points to TEMP during
   /// gap recovery.
-  Future<void> fillGapInMainDb(String dbType, List<dynamic> records) =>
-      _synchronized(() => _fillGapInMainDbImpl(dbType, records));
+  Future<void> fillGapInMainDb(
+    String dbType,
+    List<dynamic> records, {
+    DateTime? deleteFrom,
+  }) => _synchronized(
+    () => _fillGapInMainDbImpl(dbType, records, deleteFrom: deleteFrom),
+  );
 
   Future<void> _fillGapInMainDbImpl(
-      String dbType, List<dynamic> records) async {
+    String dbType,
+    List<dynamic> records, {
+    DateTime? deleteFrom,
+  }) async {
     if (records.isEmpty) return;
     final dbFile = _dbTypeToFile(dbType);
     final mainPath = '$_mainDbDir\\$dbFile';
     if (!await File(mainPath).exists()) {
-      FileLogService().log('[Recovery] Gap-fill: MAIN file missing, skip $dbFile');
+      FileLogService().log(
+        '[Recovery] Gap-fill: MAIN file missing, skip $dbFile',
+      );
       return;
     }
 
@@ -723,32 +825,66 @@ class RecoveryService {
         case 'meter':
           await mainDb.initMeterDb();
           final sorted = _sortByDbId(
-              records, mainDb.meterDb['pointList'] as Map<String, int>);
+            records,
+            mainDb.meterDb['pointList'] as Map<String, int>,
+          );
           await mainDb.addMeterData(sorted);
         case 'optime':
           await mainDb.initOptimeDb();
           final sorted = _sortByDbId(
-              records, mainDb.optimeDb['pointList'] as Map<String, int>);
+            records,
+            mainDb.optimeDb['pointList'] as Map<String, int>,
+          );
           await mainDb.addOptimeData(sorted);
         case 'ppd':
           await mainDb.initPpdDb();
           final sorted = _sortByDbId(
-              records, mainDb.ppdDb['pointList'] as Map<String, int>);
+            records,
+            mainDb.ppdDb['pointList'] as Map<String, int>,
+          );
           await mainDb.addPpdData(sorted);
         case 'history':
           await mainDb.initHistoryDb();
+          if (deleteFrom != null) {
+            final fromInt = _dateTimeToDbInt(deleteFrom);
+            for (final tbl in [
+              'jan',
+              'feb',
+              'mar',
+              'apr',
+              'may',
+              'jun',
+              'jul',
+              'aug',
+              'sep',
+              'oct',
+              'nov',
+              'dec',
+            ]) {
+              await rawDb.execute('DELETE FROM $tbl WHERE date >= $fromInt');
+            }
+            FileLogService().log(
+              '[Recovery] Gap-fill: cleared history records >= $fromInt from MAIN',
+            );
+          }
           final processed = records.map((rec) {
             final r = List<dynamic>.from(rec as List);
-            r[2] = _normalizeHistoryField(r[2]);  // com
-            r[4] = _normalizeHistoryData(r[4]);   // data
+            r[2] = _normalizeHistoryField(r[2]); // com
+            r[4] = _normalizeHistoryData(r[4]); // data
             if (r.length > 5) r[5] = _normalizeHistoryField(r[5]); // who
             return r;
           }).toList();
           await mainDb.addHistoryData(processed);
       }
-      FileLogService().log('[Recovery] Gap-fill: wrote ${records.length} record(s) → $dbFile');
+      FileLogService().log(
+        '[Recovery] Gap-fill: wrote ${records.length} record(s) → $dbFile',
+      );
     } catch (e) {
       FileLogService().log('[Recovery] Gap-fill: write error for $dbFile: $e');
+      // A failed write must abort the flush. Swallowing this error allows
+      // finalizeFlushedCleanup() to clear the gap and delete TEMP even though
+      // the recovered controller records never reached MAIN.
+      rethrow;
     } finally {
       await rawDb.close();
       mainDb.db.remove(dbType);
@@ -759,37 +895,38 @@ class RecoveryService {
   /// db_id from [pointList]. Records for new points (not yet in point_id) sort
   /// after known points; ties within new points break by string_id.
   static List<dynamic> _sortByDbId(
-      List<dynamic> records, Map<String, int> pointList) {
-    return List<dynamic>.from(records)
-      ..sort((a, b) {
-        final cmpDate = (a[0] as int).compareTo(b[0] as int);
-        if (cmpDate != 0) return cmpDate;
-        final aId = pointList[a[1].toString()];
-        final bId = pointList[b[1].toString()];
-        if (aId != null && bId != null) return aId.compareTo(bId);
-        if (aId != null) return -1;
-        if (bId != null) return 1;
-        return a[1].toString().compareTo(b[1].toString());
-      });
+    List<dynamic> records,
+    Map<String, int> pointList,
+  ) {
+    return List<dynamic>.from(records)..sort((a, b) {
+      final cmpDate = (a[0] as int).compareTo(b[0] as int);
+      if (cmpDate != 0) return cmpDate;
+      final aId = pointList[a[1].toString()];
+      final bId = pointList[b[1].toString()];
+      if (aId != null && bId != null) return aId.compareTo(bId);
+      if (aId != null) return -1;
+      if (bId != null) return 1;
+      return a[1].toString().compareTo(b[1].toString());
+    });
   }
 
   /// Maps a DB filename (e.g. `'trend.db'`) to its short type key.
   static String? fileToDbType(String file) => switch (file) {
-    'trend.db'   => 'trend',
-    'meter.db'   => 'meter',
-    'optime.db'  => 'optime',
-    'ppd.db'     => 'ppd',
+    'trend.db' => 'trend',
+    'meter.db' => 'meter',
+    'optime.db' => 'optime',
+    'ppd.db' => 'ppd',
     'history.db' => 'history',
-    _            => null,
+    _ => null,
   };
 
   static String _dbTypeToFile(String type) => switch (type) {
-    'trend'   => 'trend.db',
-    'meter'   => 'meter.db',
-    'optime'  => 'optime.db',
-    'ppd'     => 'ppd.db',
+    'trend' => 'trend.db',
+    'meter' => 'meter.db',
+    'optime' => 'optime.db',
+    'ppd' => 'ppd.db',
     'history' => 'history.db',
-    _         => throw ArgumentError('Unknown DB type: $type'),
+    _ => throw ArgumentError('Unknown DB type: $type'),
   };
 
   /// Computes the next scheduled flush time for the given [hour] and [minute].
@@ -832,22 +969,33 @@ class RecoveryService {
         final cols = await db.rawQuery("PRAGMA table_info('$tableName')");
         final colNames = cols.map((c) => c['name'] as String).toSet();
         if (!colNames.contains('date') || !colNames.contains('id')) continue;
-        final before = (await db.rawQuery(
-            'SELECT COUNT(*) AS n FROM "$tableName"')).first['n'] as int? ?? 0;
+        final before =
+            (await db.rawQuery(
+                  'SELECT COUNT(*) AS n FROM "$tableName"',
+                )).first['n']
+                as int? ??
+            0;
         await db.execute(
           'DELETE FROM "$tableName" WHERE rowid NOT IN ('
           ' SELECT MIN(rowid) FROM "$tableName" GROUP BY date, id'
           ')',
         );
-        final after = (await db.rawQuery(
-            'SELECT COUNT(*) AS n FROM "$tableName"')).first['n'] as int? ?? 0;
+        final after =
+            (await db.rawQuery(
+                  'SELECT COUNT(*) AS n FROM "$tableName"',
+                )).first['n']
+                as int? ??
+            0;
         if (before != after) {
           FileLogService().log(
-              '[Recovery] Dedup $dbFile "$tableName": removed ${before - after} duplicate(s)');
+            '[Recovery] Dedup $dbFile "$tableName": removed ${before - after} duplicate(s)',
+          );
         }
       }
     } catch (e) {
-      FileLogService().log('[Recovery] deduplicateInMain failed for $dbFile: $e');
+      FileLogService().log(
+        '[Recovery] deduplicateInMain failed for $dbFile: $e',
+      );
     } finally {
       await db.close();
     }
@@ -890,7 +1038,9 @@ class RecoveryService {
         valueCache['${r['db_id']}'] = (r['value'] as num).toDouble();
       }
     } catch (e) {
-      FileLogService().log('[Recovery] refreshMeterValueCacheFromMain failed: $e');
+      FileLogService().log(
+        '[Recovery] refreshMeterValueCacheFromMain failed: $e',
+      );
     } finally {
       await db.close();
     }
@@ -899,6 +1049,15 @@ class RecoveryService {
   // ── helpers ────────────────────────────────────────────────────────────────
 
   // ── History data normalisation ────────────────────────────────────────────
+
+  /// Converts a [DateTime] to the 12-digit integer (YYYYMMDDHHmm) used as the
+  /// `date` column value in all history monthly tables.
+  static int _dateTimeToDbInt(DateTime dt) =>
+      dt.year * 100000000 +
+      dt.month * 1000000 +
+      dt.day * 10000 +
+      dt.hour * 100 +
+      dt.minute;
 
   /// Null or the string "null" → '' so addHistoryData's raw string
   /// interpolation (`'${line[n]}'`) stores an empty string, not "null".
@@ -924,7 +1083,10 @@ class RecoveryService {
     if (v is! String) return jsonEncode(v);
     final s = v.trim();
     if (s.isEmpty || s == 'null') return '';
-    try { jsonDecode(s); return s; } catch (_) {}
+    try {
+      jsonDecode(s);
+      return s;
+    } catch (_) {}
     return _dartMapToJson(s);
   }
 
@@ -941,8 +1103,10 @@ class RecoveryService {
     int depth = 0, start = 0;
     for (int i = 0; i < inner.length; i++) {
       final ch = inner[i];
-      if (ch == '{' || ch == '[') depth++;
-      else if (ch == '}' || ch == ']') depth--;
+      if (ch == '{' || ch == '[')
+        depth++;
+      else if (ch == '}' || ch == ']')
+        depth--;
       else if (ch == ',' && depth == 0) {
         pairs.add(inner.substring(start, i).trim());
         start = i + 1;
@@ -970,11 +1134,16 @@ class RecoveryService {
 
   Future<void> _openAllDbs() async {
     if (app.db == null) return;
-    await app.db!.openHistoryDb(); await app.db!.initHistoryDb();
-    await app.db!.openMeterDb();   await app.db!.initMeterDb();
-    await app.db!.openOptimeDb();  await app.db!.initOptimeDb();
-    await app.db!.openPpdDb();     await app.db!.initPpdDb();
-    await app.db!.openTrendDb();   await app.db!.initTrendDb();
+    await app.db!.openHistoryDb();
+    await app.db!.initHistoryDb();
+    await app.db!.openMeterDb();
+    await app.db!.initMeterDb();
+    await app.db!.openOptimeDb();
+    await app.db!.initOptimeDb();
+    await app.db!.openPpdDb();
+    await app.db!.initPpdDb();
+    await app.db!.openTrendDb();
+    await app.db!.initTrendDb();
   }
 
   /// Close all open DB handles held by [ReiriDb].
@@ -982,7 +1151,9 @@ class RecoveryService {
     final reiriDb = app.db;
     if (reiriDb == null) return;
     for (final db in reiriDb.db.values) {
-      try { await db.close(); } catch (_) {}
+      try {
+        await db.close();
+      } catch (_) {}
     }
     reiriDb.db.clear();
   }

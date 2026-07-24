@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
+import 'package:reiri_db_backup_tool/lib/recovery_time_window.dart';
 import 'package:reiri_db_backup_tool/service/file_log_service.dart';
 
 const _kMetadataFileName = 'backup_metadata.json';
@@ -64,11 +65,29 @@ class BackupMetadataService {
     await save(BackupMetadata.empty());
   }
 
-  /// Writes the current time as the disconnect timestamp.
-  /// Call on explicit disconnect, logout, dispose, and every minute as a
-  /// heartbeat so crashes / force-kills leave a recent timestamp.
-  Future<void> recordDisconnect() async {
-    final updated = _current.copyWith(disconnectedAt: DateTime.now());
+  /// Records a healthy real-time checkpoint without modifying an active gap.
+  Future<void> recordHeartbeat({DateTime? at}) async {
+    if (_current.disconnectedAt != null) return;
+    final updated = _current.copyWith(lastHealthyAt: at ?? DateTime.now());
+    await save(updated);
+  }
+
+  /// Records the earliest plausible start of a disconnect window.
+  ///
+  /// Repeated calls are intentionally idempotent: delayed WebSocket events,
+  /// logout, and `dispose()` must never move an existing gap forward. The last
+  /// healthy heartbeat is used as a conservative lower bound.
+  Future<void> recordDisconnect({DateTime? at}) async {
+    final observedAt = at ?? DateTime.now();
+    final heartbeat = _current.lastHealthyAt;
+    final candidate = heartbeat != null && heartbeat.isBefore(observedAt)
+        ? heartbeat
+        : observedAt;
+    final existing = _current.disconnectedAt;
+    final gapStart = existing != null && existing.isBefore(candidate)
+        ? existing
+        : candidate;
+    final updated = _current.copyWith(disconnectedAt: gapStart);
     await save(updated);
   }
 
@@ -88,9 +107,13 @@ class BackupMetadataService {
 
     final updated = _current.copyWith(
       tConnect: tConnect,
+      lastHealthyAt: tConnect,
+      clearDisconnectedAt: true,
       detectedGaps: mergedGaps,
       gapPeriods: periods,
-      backupState: mergedGaps.isEmpty ? BackupState.realtimeMain : BackupState.realtimeTemp,
+      backupState: mergedGaps.isEmpty
+          ? BackupState.realtimeMain
+          : BackupState.realtimeTemp,
       flushStatus: mergedGaps.isEmpty ? FlushStatus.none : FlushStatus.pending,
     );
     await save(updated);
@@ -101,7 +124,9 @@ class BackupMetadataService {
   /// - Same DB file → extend the time range to cover both windows.
   /// - New DB file  → append as a new entry.
   static List<GapRange> _mergeGaps(
-      List<GapRange> existing, List<GapRange> incoming) {
+    List<GapRange> existing,
+    List<GapRange> incoming,
+  ) {
     if (incoming.isEmpty) return existing;
     final merged = List<GapRange>.from(existing);
     for (final gap in incoming) {
@@ -124,13 +149,18 @@ class BackupMetadataService {
     // Prefer the recorded disconnect time; fall back to the previous tConnect
     // (conservative: assumes disconnected immediately after last session ended).
     // If neither exists this is the very first connection — no gap possible.
-    final gapStart = _current.disconnectedAt ?? _current.tConnect;
+    final gapStart =
+        _current.disconnectedAt ?? _current.lastHealthyAt ?? _current.tConnect;
     if (gapStart == null) {
-      FileLogService().log('[Recovery] _computeGaps: no prior disconnect/connect time found — first run, no gap');
+      FileLogService().log(
+        '[Recovery] _computeGaps: no prior disconnect/connect time found — first run, no gap',
+      );
       return [];
     }
 
-    FileLogService().log('[Recovery] _computeGaps: gapStart=$gapStart  tConnect=$tConnect  duration=${tConnect.difference(gapStart).inMinutes}min');
+    FileLogService().log(
+      '[Recovery] _computeGaps: gapStart=$gapStart  tConnect=$tConnect  duration=${tConnect.difference(gapStart).inMinutes}min',
+    );
 
     // Check interval-based DBs first (all except history).
     final intervalDbFiles = kDbWriteIntervals.keys
@@ -141,28 +171,25 @@ class BackupMetadataService {
     for (final dbFile in intervalDbFiles) {
       final missed = _wroteInGap(dbFile, gapStart, tConnect);
       if (missed) {
-        gaps.add(GapRange(
-          dbFile: dbFile,
-          start: gapStart,
-          end: tConnect,
-        ));
+        gaps.add(GapRange(dbFile: dbFile, start: gapStart, end: tConnect));
         FileLogService().log('[Recovery]   MISS $dbFile');
       } else {
         FileLogService().log('[Recovery]   OK   $dbFile');
       }
     }
 
-    // History is event-based — include it only when at least one interval-based
-    // DB is already missing, using the disconnect time as the recovery start.
-    if (gaps.isNotEmpty) {
-      gaps.add(GapRange(
-        dbFile: 'history.db',
-        start: gapStart,
-        end: tConnect,
-      ));
-      FileLogService().log('[Recovery]   MISS history.db (start=disconnectedAt=$gapStart)');
+    // History is event-based and can change at any moment, so every actual
+    // disconnect window is potentially missing history even when it did not
+    // cross an interval-database boundary.
+    if (tConnect.isAfter(gapStart)) {
+      gaps.add(GapRange(dbFile: 'history.db', start: gapStart, end: tConnect));
+      FileLogService().log(
+        '[Recovery]   MISS history.db (start=disconnectedAt=$gapStart)',
+      );
     } else {
-      FileLogService().log('[Recovery]   OK   history.db (no interval DB gaps — skipped)');
+      FileLogService().log(
+        '[Recovery]   OK   history.db (empty disconnect window)',
+      );
     }
 
     return gaps;
@@ -177,31 +204,16 @@ class BackupMetadataService {
   /// whether it falls before [tConnect].
   bool _wroteInGap(String dbFile, DateTime gapStart, DateTime tConnect) {
     final intervalMin = kDbWriteIntervals[dbFile]!.inMinutes;
-    final nextWrite = _nextBoundary(gapStart, intervalMin);
-    final missed = nextWrite.isBefore(tConnect);
-    FileLogService().log('[Recovery]     $dbFile: next boundary after disconnect = $nextWrite  reconnect = $tConnect  missed=$missed');
+    final previousWrite = previousWriteBoundary(gapStart, intervalMin);
+    final missed = scheduledWriteMayBeMissed(
+      gapStart: gapStart,
+      reconnectAt: tConnect,
+      intervalMinutes: intervalMin,
+    );
+    FileLogService().log(
+      '[Recovery]     $dbFile: previous boundary = $previousWrite  reconnect = $tConnect  grace=${kControllerWriteGrace.inSeconds}s  missed=$missed',
+    );
     return missed;
-  }
-
-  /// Returns the next clock boundary that is a multiple of [intervalMin]
-  /// strictly after [from].
-  ///
-  /// Examples (intervalMin=15):
-  ///   16:48:58 → 17:00:00
-  ///   17:00:00 → 17:15:00
-  ///   16:44:59 → 16:45:00
-  static DateTime _nextBoundary(DateTime from, int intervalMin) {
-    final minsFromMidnight = from.hour * 60 + from.minute;
-    final onBoundaryExact = minsFromMidnight % intervalMin == 0
-        && from.second == 0
-        && from.millisecond == 0;
-    final nextMins = onBoundaryExact
-        ? minsFromMidnight + intervalMin
-        : ((minsFromMidnight ~/ intervalMin) + 1) * intervalMin;
-    final dayOffset = nextMins ~/ (24 * 60);
-    final timeMin = nextMins % (24 * 60);
-    return DateTime(from.year, from.month, from.day + dayOffset,
-        timeMin ~/ 60, timeMin % 60);
   }
 
   /// Records that TEMP DB is the active write target for gap recovery.
@@ -233,7 +245,7 @@ class BackupMetadataService {
       detectedGaps: [],
       gapPeriods: [],
       clearTempDbPath: true,
-      clearDisconnectedAt: true,
+      autoFill: false,
     );
     await save(updated);
   }

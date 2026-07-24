@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:std_widget/std_widget.dart';
+import 'package:std_widget/reiri_icons.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
 class ReiriScreen extends ConsumerWidget {
