@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
 import 'package:reiri_db_backup_tool/model/backup_log_entry.dart';
 import 'package:reiri_db_backup_tool/provider/backup_log_provider.dart';
 
@@ -75,8 +76,10 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
     for (final e in entries) {
       buf.writeln(
         csvRow([
-          e.backedUpAt != null ? _fmtDateTime(e.backedUpAt!) : '',
-          _fmtDateTime(e.timestamp),
+          e.backedUpAt != null
+              ? formatDateTime(e.backedUpAt!, includeSeconds: true)
+              : '',
+          formatDateTime(e.timestamp, includeSeconds: true),
           e.type == BackupLogType.realtime ? 'Real-time' : 'Recovery',
           e.result == BackupLogResult.success ? 'Success' : 'Fail',
           e.database,
@@ -445,7 +448,9 @@ class _LogRow extends StatelessWidget {
           Expanded(
             flex: 20,
             child: Text(
-              entry.backedUpAt != null ? _fmtDateTime(entry.backedUpAt!) : '—',
+              entry.backedUpAt != null
+                  ? formatDateTime(entry.backedUpAt!, includeSeconds: true)
+                  : '—',
               style: TextStyle(
                 fontSize: 13,
                 color: entry.backedUpAt != null ? null : Colors.grey,
@@ -455,7 +460,7 @@ class _LogRow extends StatelessWidget {
           Expanded(
             flex: 20,
             child: Text(
-              _fmtDateTime(entry.timestamp),
+              formatDateTime(entry.timestamp, includeSeconds: true),
               style: const TextStyle(fontSize: 13),
             ),
           ),
@@ -529,29 +534,3 @@ class _LogBadge extends StatelessWidget {
     );
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-String _fmtDateTime(DateTime dt) {
-  final d = dt.day.toString().padLeft(2, '0');
-  final mon = _kMonths[dt.month - 1];
-  final h = dt.hour.toString().padLeft(2, '0');
-  final m = dt.minute.toString().padLeft(2, '0');
-  final s = dt.second.toString().padLeft(2, '0');
-  return '$d $mon $h:$m:$s';
-}
-
-const _kMonths = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];

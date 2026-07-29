@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
+import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
 import 'package:reiri_db_backup_tool/service/tray_service.dart';
 import 'package:reiri_db_backup_tool/model/backup_log_entry.dart';
@@ -673,7 +674,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (rowId != null) _prevHistoryRowId[filename] = rowId;
       }
 
-      final recordTime = _dbIntToDateTime(latest);
+      final recordTime = dbIntToDateTime(latest);
       if (!advanced) {
         _appendRealtimeFailure(
           filename,
@@ -686,7 +687,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
       final interval = kDbWriteIntervals[filename];
       if (previous != null && interval != null && filename != 'history.db') {
-        final previousTime = _dbIntToDateTime(previous);
+        final previousTime = dbIntToDateTime(previous);
         final expected = previousTime.add(interval);
         if (recordTime.isAfter(expected)) {
           final skipped =
@@ -994,23 +995,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/// Converts the DB integer date format (YYYYMMDDHHmm) to a [DateTime].
 DateTime? _laterOf(DateTime? a, DateTime? b) {
   if (a == null) return b;
   if (b == null) return a;
   return a.isAfter(b) ? a : b;
-}
-
-DateTime _dbIntToDateTime(int date) {
-  final year = date ~/ 100000000;
-  final rest = date % 100000000;
-  final month = rest ~/ 1000000;
-  final rest2 = rest % 1000000;
-  final day = rest2 ~/ 10000;
-  final rest3 = rest2 % 10000;
-  final hour = rest3 ~/ 100;
-  final min = rest3 % 100;
-  return DateTime(year, month, day, hour, min);
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -1570,7 +1558,7 @@ class _TableRow extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _fmtDateTime(db.lastBackup!),
+                        formatDateTime(db.lastBackup!),
                         style: const TextStyle(fontSize: 13),
                       ),
                       Text(
@@ -1694,14 +1682,6 @@ class _RealtimeBackupCard extends StatelessWidget {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-String _fmtDateTime(DateTime dt) {
-  final d = dt.day.toString().padLeft(2, '0');
-  final mon = _kMonths[dt.month - 1];
-  final h = dt.hour.toString().padLeft(2, '0');
-  final m = dt.minute.toString().padLeft(2, '0');
-  return '$d $mon $h:$m';
-}
-
 String _fmtAgo(DateTime dt) {
   final diff = DateTime.now().difference(dt);
   if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
@@ -1709,18 +1689,3 @@ String _fmtAgo(DateTime dt) {
   if (diff.inHours < 24) return '${diff.inHours}h ago';
   return '${diff.inDays}d ago';
 }
-
-const _kMonths = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];

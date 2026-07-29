@@ -33,8 +33,6 @@ class BackupLogNotifier extends Notifier<List<BackupLogEntry>> {
     } catch (_) {}
   }
 
-  Future<void> addEntry(BackupLogEntry entry) => addEntries([entry]);
-
   Future<void> addEntries(List<BackupLogEntry> newEntries) async {
     if (_mac.isEmpty) return;
     final updated = [...newEntries, ...state];
@@ -51,27 +49,6 @@ class BackupLogNotifier extends Notifier<List<BackupLogEntry>> {
         _kStorageKey,
         {'entries': entries.map((e) => e.toJson()).toList()},
         macaddr: _mac,
-      );
-    } catch (_) {}
-  }
-
-  /// Persists entries directly to storage without going through the provider.
-  /// Use this from screens that run before HomeScreen mounts (e.g. initial backup).
-  static Future<void> persistEntries(
-      String mac, List<BackupLogEntry> newEntries) async {
-    try {
-      final data = await app.loadJson(_kStorageKey, macaddr: mac);
-      final raw = data['entries'] as List<dynamic>? ?? [];
-      final existing = raw
-          .map((e) => BackupLogEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
-      final all = [...newEntries, ...existing];
-      final capped =
-          all.length > _kMaxEntries ? all.sublist(0, _kMaxEntries) : all;
-      await app.storeJson(
-        _kStorageKey,
-        {'entries': capped.map((e) => e.toJson()).toList()},
-        macaddr: mac,
       );
     } catch (_) {}
   }

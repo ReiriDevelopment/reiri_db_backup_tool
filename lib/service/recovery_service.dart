@@ -14,9 +14,9 @@ import 'package:reiri_db_backup_tool/service/file_log_service.dart';
 ///
 /// Flow when a gap is detected:
 ///   1. [onConnected] → gaps found → real-time writes routed to TEMP DB.
-///   2. Regular backup (gap-fill) runs and writes missing records to MAIN DB.
-///   3. [flushTempToMain] → all TEMP records appended to MAIN in one transaction.
-///   4. [switchToMainDb] → real-time routes back to MAIN DB; TEMP deleted.
+///   2. [RecoveryNotifier.runFlushNow] gap-fill from controller → [fillGapInMainDb].
+///   3. Interleaved [flushTempWindowToMain] after each gap period.
+///   4. [finalizeFlushedCleanup] switches to MAIN; TEMP deleted.
 ///
 /// When no gap: [onConnected] returns an empty list and real-time stays on MAIN DB.
 class RecoveryService {
@@ -246,8 +246,8 @@ class RecoveryService {
 
   /// Closes all DB handles held by [app.db].  Call before flush so that
   /// [_syncNewPointsInTemp] can write to TEMP without competing with the
-  /// realtime [app.db] writer.  [finalizeFlushedCleanup] → [switchToMainDb]
-  /// reopens everything on MAIN when the flush is done.
+  /// realtime [app.db] writer. [finalizeFlushedCleanup] reopens everything on
+  /// MAIN when the flush is done.
   Future<void> suspendRealtime() => _synchronized(_closeAllDbs);
 
   /// Persists a healthy checkpoint without changing an active gap start.
@@ -262,27 +262,6 @@ class RecoveryService {
       '[Recovery] Disconnect recorded at ${_meta.current.disconnectedAt}',
     );
   });
-
-  /// Closes MAIN DB handles, switches the global SQLite path to TEMP,
-  /// opens / initialises all DB files there, and persists the flush state.
-  Future<void> _openTempDb() async {
-    final dir = Directory(_tempDbDir);
-    if (!await dir.exists()) await dir.create(recursive: true);
-
-    await _closeAllDbs();
-    await app.setDbPath(_tempDbDir);
-    await _openAllDbs();
-    await _meta.markFlushInProgress(_tempDbDir);
-    FileLogService().log('[Recovery] TEMP DB opened at $_tempDbDir');
-  }
-
-  /// Flushes all records from TEMP DB into MAIN DB (one transaction per file),
-  /// then switches real-time back to MAIN DB and deletes TEMP.
-  Future<void> flushTempToMain() async {
-    if (!hasActiveGap) return;
-    FileLogService().log('[Recovery] Starting TEMP → MAIN flush');
-    await _synchronized(_doFlush);
-  }
 
   Future<void> _doFlush() async {
     // Set inProgress before touching any files — this is the crash-recovery
@@ -757,10 +736,6 @@ class RecoveryService {
     return parts.join(' AND ');
   }
 
-  /// Redirects [app.db] back to MAIN DB.  Call after [flushTempToMain] or
-  /// when the user manually dismisses a gap (e.g. gap-fill was done elsewhere).
-  Future<void> switchToMainDb() => _synchronized(_switchToMainDbImpl);
-
   Future<void> _switchToMainDbImpl() async {
     await app.setDbPath(_mainDbDir);
     await _openAllDbs();
@@ -1000,9 +975,6 @@ class RecoveryService {
       await db.close();
     }
   });
-
-  /// Convenience wrapper kept for callers that already reference this by name.
-  Future<void> deduplicateTrendInMain() => deduplicateInMain('trend.db');
 
   /// Refreshes [app.db]'s in-memory meter last-value cache from MAIN after
   /// catch-up writes, WITHOUT closing any live DB handles.

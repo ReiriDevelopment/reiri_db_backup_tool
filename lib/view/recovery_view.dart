@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/provider/recovery_provider.dart';
 
@@ -119,73 +120,6 @@ class _ScanButton extends ConsumerWidget {
   }
 }
 
-// ── TEMP DB active banner ─────────────────────────────────────────────────────
-
-class _TempDbBanner extends StatelessWidget {
-  final bool isFlushing;
-  final WidgetRef ref;
-  const _TempDbBanner({required this.isFlushing, required this.ref});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Row(
-        children: [
-          isFlushing
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.orange.shade700,
-                  ),
-                )
-              : Icon(
-                  Icons.sync_rounded,
-                  size: 16,
-                  color: Colors.orange.shade700,
-                ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              isFlushing
-                  ? 'Applying recovered records'
-                  : 'Filling in missing data in the background.',
-              style: TextStyle(fontSize: 13, color: Colors.orange.shade800),
-            ),
-          ),
-          const SizedBox(width: 12),
-          if (!isFlushing)
-            TextButton(
-              onPressed: () =>
-                  ref.read(recoveryProvider.notifier).runFlushNow(),
-              style:
-                  TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                    foregroundColor: Colors.orange.shade800,
-                  ).copyWith(
-                    mouseCursor: const WidgetStatePropertyAll(
-                      SystemMouseCursors.click,
-                    ),
-                  ),
-              child: const Text('Run Now', style: TextStyle(fontSize: 12)),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Gap table ─────────────────────────────────────────────────────────────────
 
 class _GapTable extends StatelessWidget {
@@ -274,7 +208,7 @@ class _GapRow extends StatelessWidget {
     }
 
     final scheduleLabel = scheduledAt != null
-        ? _fmtScheduled(scheduledAt!)
+        ? formatScheduledDateTime(scheduledAt!)
         : '—';
 
     return Container(
@@ -300,7 +234,7 @@ class _GapRow extends StatelessWidget {
           Expanded(
             flex: 38,
             child: Text(
-              '${_fmtDate(gap.start)} – ${_fmtDate(gap.end)}',
+              '${formatDateTime(gap.start)} – ${formatDateTime(gap.end)}',
               style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
             ),
           ),
@@ -433,39 +367,3 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-String _fmtDate(DateTime dt) {
-  final d = dt.day.toString().padLeft(2, '0');
-  final mon = _kMonths[dt.month - 1];
-  final h = dt.hour.toString().padLeft(2, '0');
-  final m = dt.minute.toString().padLeft(2, '0');
-  return '$d $mon $h:$m';
-}
-
-String _fmtScheduled(DateTime dt) {
-  final now = DateTime.now();
-  final isToday =
-      dt.day == now.day && dt.month == now.month && dt.year == now.year;
-  final h = dt.hour.toString().padLeft(2, '0');
-  final m = dt.minute.toString().padLeft(2, '0');
-  if (!isToday) return '${_kMonths[dt.month - 1]} ${dt.day} $h:$m';
-  final label = dt.hour >= 18 ? 'Tonight' : 'Today';
-  return '$label $h:$m';
-}
-
-const _kMonths = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];

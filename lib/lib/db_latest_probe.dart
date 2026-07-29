@@ -2,7 +2,11 @@ import 'dart:io';
 
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
+
+export 'package:reiri_db_backup_tool/lib/date_time_utils.dart'
+    show dbIntToDateTime;
 
 /// Result of inspecting one DB file in a source folder before import.
 class DbProbeResult {
@@ -79,19 +83,6 @@ Future<DateTime?> probeLatestRecord(String dbPath) async {
   } finally {
     await db?.close();
   }
-}
-
-/// Converts the 12-digit DB date integer `YYYYMMDDHHmm` to a [DateTime].
-DateTime dbIntToDateTime(int date) {
-  final year = date ~/ 100000000;
-  final rest = date % 100000000;
-  final month = rest ~/ 1000000;
-  final rest2 = rest % 1000000;
-  final day = rest2 ~/ 10000;
-  final rest3 = rest2 % 10000;
-  final hour = rest3 ~/ 100;
-  final min = rest3 % 100;
-  return DateTime(year, month, day, hour, min);
 }
 
 /// Probes every required interval-based DB file in [sourceFolder] and reports

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
+import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
 import 'package:reiri_db_backup_tool/lib/recovery_response_validation.dart';
 import 'package:reiri_db_backup_tool/lib/recovery_time_window.dart';
@@ -483,7 +484,7 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
 
         // Convert min/max DB int dates to DateTime for the backup log entry.
         final dateTimes = rawDates
-            .map((v) => _dbIntToDateTime(v is int ? v : null))
+            .map((v) => v is int && v > 0 ? dbIntToDateTime(v) : null)
             .whereType<DateTime>()
             .toList();
         final first = dateTimes.isEmpty
@@ -523,20 +524,6 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
     } finally {
       sub.close();
     }
-  }
-
-  /// Converts a 12-digit DB integer (YYYYMMDDHHmm) to [DateTime].
-  static DateTime? _dbIntToDateTime(int? v) {
-    if (v == null || v <= 0) return null;
-    final year = v ~/ 100000000;
-    final rest = v % 100000000;
-    final month = rest ~/ 1000000;
-    final rest2 = rest % 1000000;
-    final day = rest2 ~/ 10000;
-    final rest3 = rest2 % 10000;
-    final hour = rest3 ~/ 100;
-    final minute = rest3 % 100;
-    return DateTime(year, month, day, hour, minute);
   }
 
   DateTime _nextOffPeak() => RecoveryService.nextOffPeakTime(

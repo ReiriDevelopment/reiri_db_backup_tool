@@ -72,7 +72,7 @@ After the old flush, MAIN's `meter` table held two separate `id` streams for the
 - `id = 5`: records up to the disconnect time (14:30), value = `8719.64`
 - `id = 1`: records from reconnect time onwards (14:45 through 03:00am), value = `8725.65`
 
-When `switchToMainDb()` runs after the flush, it calls `initMeterDb()` on MAIN. That function reads the most recent meter records to initialise `meterDb['value']` (the "last known value per db_id" cache). The most recent records for `id = 5` are the pre-gap rows (last value `8719.64`), because all newer real-time data was stored under `id = 1`.
+When the recovery flow switches back to MAIN after the flush, it calls `initMeterDb()` on MAIN. That function reads the most recent meter records to initialise `meterDb['value']` (the "last known value per db_id" cache). The most recent records for `id = 5` are the pre-gap rows (last value `8719.64`), because all newer real-time data was stored under `id = 1`.
 
 When the first real-time push after the switch arrives (value `8725.81`), `addRealtimeMeterData` looks up the string id → `db_id = 5` (correct from MAIN's `point_id`) and computes:
 

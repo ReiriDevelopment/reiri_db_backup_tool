@@ -249,15 +249,4 @@ class BackupMetadataService {
     );
     await save(updated);
   }
-
-  Future<void> clearGaps() async {
-    final updated = _current.copyWith(
-      detectedGaps: [],
-      gapPeriods: [],
-      backupState: BackupState.realtimeMain,
-      flushStatus: FlushStatus.none,
-      clearTempDbPath: true,
-    );
-    await save(updated);
-  }
 }
