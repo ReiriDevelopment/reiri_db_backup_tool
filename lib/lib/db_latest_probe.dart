@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
+import 'package:reiri_db_backup_tool/lib/recovery_time_window.dart';
+import 'package:reiri_db_backup_tool/model/backup_database.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 
 export 'package:reiri_db_backup_tool/lib/date_time_utils.dart'
@@ -17,9 +19,7 @@ class DbProbeResult {
   /// missing, empty, or unreadable).
   final DateTime? latestRecord;
 
-  /// True if at least one scheduled write boundary for this DB falls between
-  /// [latestRecord] and "now" — i.e. there is data on the controller that the
-  /// imported snapshot is missing.
+  /// Whether the controller may contain records newer than [latestRecord].
   final bool hasMissingData;
 
   /// Convenience: time between latestRecord and now (null when no record).
@@ -33,18 +33,14 @@ class DbProbeResult {
   });
 
   const DbProbeResult.missing()
-      : exists = false,
-        latestRecord = null,
-        hasMissingData = false,
-        behind = null;
+    : exists = false,
+      latestRecord = null,
+      hasMissingData = false,
+      behind = null;
 }
 
-/// Opens [dbPath] read-only, walks every user table that has a `date` column,
-/// and returns the overall `max(date)` as a [DateTime].
-///
-/// Returns null when the file is missing/empty/unreadable, or when no `date`
-/// column is found in any table. Date values are stored as 12-digit ints in
-/// `YYYYMMDDHHmm` format (the same format used everywhere else in the app).
+/// Returns the latest `YYYYMMDDHHmm` date across all readable user tables.
+/// Returns null when the file or a dated record is unavailable.
 Future<DateTime?> probeLatestRecord(String dbPath) async {
   final f = File(dbPath);
   if (!await f.exists() || await f.length() == 0) return null;
@@ -85,15 +81,8 @@ Future<DateTime?> probeLatestRecord(String dbPath) async {
   }
 }
 
-/// Probes every required interval-based DB file in [sourceFolder] and reports
-/// which ones are behind the current wall-clock time.
-///
-/// Mirrors the gap-detection logic in [BackupMetadataService._computeGaps]:
-/// for each interval-based DB we check whether at least one scheduled write
-/// boundary falls between the imported snapshot's latest record and "now".
-/// `history.db` is event-based — it's only treated as missing when an
-/// interval-based DB is already missing data (consistent with the runtime
-/// gap-detection rule).
+/// Reports which source databases may be behind the controller.
+/// History follows the interval databases because it is event-based.
 Future<Map<String, DbProbeResult>> probeSourceFolder({
   required String sourceFolder,
   required List<String> dbFiles,
@@ -103,6 +92,7 @@ Future<Map<String, DbProbeResult>> probeSourceFolder({
   final results = <String, DbProbeResult>{};
 
   for (final fname in dbFiles) {
+    final database = BackupDatabase.tryFromFileName(fname);
     final path = '$sourceFolder\\$fname';
     final file = File(path);
     if (!await file.exists()) {
@@ -121,17 +111,11 @@ Future<Map<String, DbProbeResult>> probeSourceFolder({
       continue;
     }
 
-    final interval = kDbWriteIntervals[fname];
+    final interval = database?.interval;
     bool missed = false;
-    if (interval != null && fname != 'history.db') {
-      // A record stamped T is written by the controller at (or very shortly
-      // after) T — both instantaneous-reading DBs (trend) and accumulated DBs
-      // (meter/optime/ppd, where T is the END of the [T-interval, T] window)
-      // are available as soon as the clock passes T.  A previous version added
-      // one extra interval as a buffer, but that made the probe blind to any
-      // record written in that window (e.g. trend stamped 17:35, FTP downloaded
-      // trend.db at 17:34, probe ran at 17:35:12 → 17:35+5=17:40 > 17:35:12
-      // → not flagged → data permanently lost).
+    if (interval != null && database?.eventBased == false) {
+      // Records become available at their stamped boundary.
+      // Do not add an interval buffer or the newest record may be missed.
       final nextRecordStamp = _nextBoundary(latest, interval.inMinutes);
       missed = nextRecordStamp.isBefore(tNow);
     }
@@ -144,13 +128,14 @@ Future<Map<String, DbProbeResult>> probeSourceFolder({
   }
 
   // history.db piggy-backs on the interval-DB check.
-  if (dbFiles.contains('history.db')) {
+  const history = BackupDatabase.history;
+  if (dbFiles.contains(history.fileName)) {
     final anyMiss = results.entries
-        .where((e) => e.key != 'history.db')
+        .where((entry) => entry.key != history.fileName)
         .any((e) => e.value.hasMissingData);
-    final h = results['history.db'];
+    final h = results[history.fileName];
     if (h != null && h.exists && h.latestRecord != null && anyMiss) {
-      results['history.db'] = DbProbeResult(
+      results[history.fileName] = DbProbeResult(
         exists: true,
         latestRecord: h.latestRecord,
         hasMissingData: true,
@@ -162,12 +147,7 @@ Future<Map<String, DbProbeResult>> probeSourceFolder({
   return results;
 }
 
-/// Builds the list of [GapRange] entries that should be written into
-/// `backup_metadata.json` immediately after an import, so the next
-/// `RecoveryService.onConnected()` sees them and routes real-time to TEMP DB.
-///
-/// Each gap spans `latestRecord → now` for the corresponding file. Only files
-/// with [DbProbeResult.hasMissingData] are included.
+/// Converts missing probe results into gaps for the next recovery cycle.
 List<GapRange> probeResultsToGaps(
   Map<String, DbProbeResult> probe, {
   DateTime? now,
@@ -178,29 +158,58 @@ List<GapRange> probeResultsToGaps(
     final fname = entry.key;
     final r = entry.value;
     if (!r.hasMissingData || r.latestRecord == null) continue;
-    // For interval-based DBs the latest record is already captured — the first
-    // truly missing timestamp is one interval later. history.db is event-based,
-    // so the start stays at the latest event.
-    final interval = kDbWriteIntervals[fname];
-    final start = (interval != null && fname != 'history.db')
+    // Interval gaps start after the captured record; history starts at it.
+    final database = BackupDatabase.tryFromFileName(fname);
+    final interval = database?.interval;
+    final start = (interval != null && database?.eventBased == false)
         ? r.latestRecord!.add(interval)
         : r.latestRecord!;
-    gaps.add(GapRange(
-      dbFile: fname,
-      start: start,
-      end: tNow,
-    ));
+    gaps.add(GapRange(dbFile: fname, start: start, end: tNow));
   }
   return gaps;
 }
 
-/// Returns the next clock boundary that is a multiple of [intervalMin]
-/// strictly after [from]. Replica of the private helper in
-/// `BackupMetadataService` — duplicated here so this utility can be used
-/// before the service is initialised.
+/// Adds a conservative overlap for the latest trend boundary after FTP.
+///
+/// A streamed SQLite snapshot can contain some rows from the newest trend
+/// batch while other rows from that same timestamp are still being written.
+/// The overall `max(date)` probe cannot detect that partial batch, so FTP must
+/// always request the latest five-minute boundary again. Recovery later
+/// deduplicates overlapping `(date, id)` rows.
+List<GapRange> addFtpTrendOverlap(
+  List<GapRange> gaps, {
+  required DateTime completedAt,
+}) {
+  const trend = BackupDatabase.trend;
+  final intervalMinutes = trend.interval!.inMinutes;
+  final overlap = GapRange(
+    dbFile: trend.fileName,
+    start: previousWriteBoundary(completedAt, intervalMinutes),
+    end: completedAt,
+  );
+  final result = List<GapRange>.from(gaps);
+  final index = result.indexWhere((gap) => gap.dbFile == trend.fileName);
+  if (index < 0) {
+    result.add(overlap);
+    return result;
+  }
+
+  final existing = result[index];
+  result[index] = GapRange(
+    dbFile: trend.fileName,
+    start: existing.start.isBefore(overlap.start)
+        ? existing.start
+        : overlap.start,
+    end: existing.end.isAfter(overlap.end) ? existing.end : overlap.end,
+  );
+  return result;
+}
+
+/// Returns the first [intervalMin] clock boundary strictly after [from].
 DateTime _nextBoundary(DateTime from, int intervalMin) {
   final minsFromMidnight = from.hour * 60 + from.minute;
-  final onBoundaryExact = minsFromMidnight % intervalMin == 0 &&
+  final onBoundaryExact =
+      minsFromMidnight % intervalMin == 0 &&
       from.second == 0 &&
       from.millisecond == 0;
   final nextMins = onBoundaryExact
@@ -208,6 +217,11 @@ DateTime _nextBoundary(DateTime from, int intervalMin) {
       : ((minsFromMidnight ~/ intervalMin) + 1) * intervalMin;
   final dayOffset = nextMins ~/ (24 * 60);
   final timeMin = nextMins % (24 * 60);
-  return DateTime(from.year, from.month, from.day + dayOffset,
-      timeMin ~/ 60, timeMin % 60);
+  return DateTime(
+    from.year,
+    from.month,
+    from.day + dayOffset,
+    timeMin ~/ 60,
+    timeMin % 60,
+  );
 }

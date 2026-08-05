@@ -1,8 +1,6 @@
 import 'dart:io';
 
-/// Singleton that appends timestamped lines to a daily log file under the
-/// per-controller `backup log` subfolder.  Call [init] once the backup root
-/// and MAC are known; all [log] calls before [init] are silently ignored.
+/// Appends timestamped lines to the active controller's daily log.
 class FileLogService {
   static final FileLogService _instance = FileLogService._();
   FileLogService._();
@@ -10,16 +8,7 @@ class FileLogService {
 
   String? _logPath;
 
-  /// Sets the active log file to
-  /// `{rootPath}\{safeMac}\backup log\backup_YYYY-MM-DD.log`, placing the
-  /// log folder at the same level as `DB` and `DB_TEMP` for the controller.
-  /// Creates the folder if it does not yet exist.
-  ///
-  /// When [safeMac] is empty (no controller selected yet) the log falls back
-  /// to `{rootPath}\backup log\backup_YYYY-MM-DD.log` so logging still works
-  /// during early bring-up.
-  ///
-  /// Safe to call more than once (e.g. if the path changes or date rolls over).
+  /// Selects the daily log, using the root folder when [safeMac] is empty.
   void init(String rootPath, {required String safeMac}) {
     final dir = safeMac.isEmpty
         ? '$rootPath\\backup log'

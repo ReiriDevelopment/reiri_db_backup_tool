@@ -6,6 +6,7 @@ import 'dart:convert';
 
 // Read *.qrc file in downloads folder to get controller information
 // this is used only for Windows version
+/// Parses controller connection details from a Reiri `.qrc` file.
 class QrcFileReader {
   Future<Map<String, Map<String, dynamic>>> getList() async {
     // get downloads folder path

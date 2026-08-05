@@ -8,6 +8,7 @@ import 'package:reiri_db_backup_tool/lib/db_latest_probe.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 
+/// Imports an initial controller database set from a local folder.
 class InitialBackupLocalImportView extends StatefulWidget {
   const InitialBackupLocalImportView({
     super.key,
@@ -28,6 +29,7 @@ class InitialBackupLocalImportView extends StatefulWidget {
       _InitialBackupLocalImportViewState();
 }
 
+/// Manages local folder selection, validation, copying, and completion.
 class _InitialBackupLocalImportViewState
     extends State<InitialBackupLocalImportView> {
   String? _sourcePath;
@@ -37,9 +39,7 @@ class _InitialBackupLocalImportViewState
   bool _isScanning = false;
   bool _scanDone = false;
 
-  /// Per-file probe result: existence + latest record + missing-data flag.
-  /// Used both for the UI (file present?) and to silently seed
-  /// `backup_metadata.detectedGaps` so the gap-fill flow kicks in on connect.
+  /// Drives file validation and seeds gaps for first-connect recovery.
   final Map<String, DbProbeResult> _scanResult = {};
 
   double _progress01 = 0;
@@ -177,9 +177,7 @@ class _InitialBackupLocalImportViewState
         clearDest: false,
       );
 
-      // 3) Re-probe the staged copy right before navigating so boundaries
-      //    that crossed during the copy itself (e.g. user clicked Import at
-      //    14:14:30 and the copy finished at 14:15:10) are captured too.
+      // Re-probe because a write boundary may pass during the copy.
       final finalProbe = await probeSourceFolder(
         sourceFolder: stagingDir.path,
         dbFiles: kInitialBackupDbFiles,
@@ -190,9 +188,9 @@ class _InitialBackupLocalImportViewState
       await widget.onCompleted('local', _backupPath!, initialGaps: initialGaps);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Import failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${app.word('import_failed')}: $e')),
+      );
     } finally {
       if (!mounted) return;
       setState(() {
@@ -212,7 +210,7 @@ class _InitialBackupLocalImportViewState
       ),
       title: Text(fileName, style: const TextStyle(fontSize: 13.5)),
       trailing: Text(
-        exists ? 'OK' : 'Missing',
+        app.word(exists ? 'ok' : 'missing'),
         style: TextStyle(
           fontSize: 12,
           color: exists ? app.color.inactive : app.color.alert,
@@ -230,7 +228,7 @@ class _InitialBackupLocalImportViewState
           builder: (context) {
             final cs = Theme.of(context).colorScheme;
             return Text(
-              'history.db  •  meter.db  •  optime.db  •  trend.db  •  ppd.db',
+              kInitialBackupDbFiles.join('  •  '),
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
@@ -244,7 +242,7 @@ class _InitialBackupLocalImportViewState
           children: [
             ElevatedButton.icon(
               icon: const Icon(Icons.folder_open),
-              label: const Text('Select Source Folder'),
+              label: Text(app.word('select_source_folder')),
               onPressed: _isImporting ? null : _pickSourcePath,
               style: const ButtonStyle(
                 mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
@@ -255,7 +253,7 @@ class _InitialBackupLocalImportViewState
         const SizedBox(height: 6),
         if (_sourcePath != null)
           Text(
-            'Source: $_sourcePath',
+            '${app.word('source_path')}: $_sourcePath',
             style: TextStyle(color: app.color.inactive, fontSize: 13),
           ),
         const SizedBox(height: 10),
@@ -264,7 +262,7 @@ class _InitialBackupLocalImportViewState
           children: [
             ElevatedButton.icon(
               icon: const Icon(Icons.save_alt_outlined),
-              label: const Text('Select Backup Path'),
+              label: Text(app.word('select_backup_path')),
               onPressed: _isImporting ? null : _pickBackupPath,
               style: const ButtonStyle(
                 mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
@@ -275,7 +273,9 @@ class _InitialBackupLocalImportViewState
         const SizedBox(height: 6),
         if (_backupPath != null)
           Text(
-            'Backup root: $_backupPath\nController folder: ${macToSafeFolderName(widget.controllerMac)}',
+            '${app.word('backup_root_label')}: $_backupPath\n'
+            '${app.word('controller_folder_label')}: '
+            '${macToSafeFolderName(widget.controllerMac)}',
             style: TextStyle(color: app.color.inactive, fontSize: 13),
           ),
         const SizedBox(height: 12),
@@ -290,16 +290,16 @@ class _InitialBackupLocalImportViewState
               ),
               const SizedBox(width: 8),
               Text(
-                'Scanning DB files' + '...',
+                app.word('scanning_db_files'),
                 style: TextStyle(color: app.color.inactive, fontSize: 12.5),
               ),
             ],
           ),
 
         if (_sourcePath != null && _scanDone) ...[
-          const Text(
-            'Scan Result',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          Text(
+            app.word('scan_result'),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
           const SizedBox(height: 6),
           SizedBox(
@@ -320,7 +320,7 @@ class _InitialBackupLocalImportViewState
           child: ElevatedButton.icon(
             onPressed: _canImport ? _startImport : null,
             icon: const Icon(Icons.file_upload_rounded),
-            label: const Text('Import'),
+            label: Text(app.word('import')),
             style: ElevatedButton.styleFrom().copyWith(
               mouseCursor: WidgetStateProperty.resolveWith(
                 (s) => s.contains(WidgetState.disabled)
@@ -336,7 +336,8 @@ class _InitialBackupLocalImportViewState
           LinearProgressIndicator(value: _progress01),
           const SizedBox(height: 8),
           Text(
-            'Importing... (${(_progress01 * 100).toStringAsFixed(0)}%)',
+            '${app.word('importing_progress')} '
+            '(${(_progress01 * 100).toStringAsFixed(0)}%)',
             style: TextStyle(color: app.color.inactive, fontSize: 12.5),
           ),
         ],

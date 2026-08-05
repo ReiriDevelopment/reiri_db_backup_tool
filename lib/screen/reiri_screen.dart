@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:std_widget/reiri_icons.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
+/// Provides the shared scaffold and layout helpers used by setup screens.
 class ReiriScreen extends ConsumerWidget {
   ReiriScreen();
   EdgeInsetsGeometry bottomMargin = EdgeInsets.fromLTRB(0, 0, 0, 10);
@@ -17,7 +18,11 @@ class ReiriScreen extends ConsumerWidget {
       body: Container(
         margin: bottomMargin,
         child: SingleChildScrollView(
-          child: Container(margin: scrollAreaMargin, alignment: Alignment.topCenter, child: Container()),
+          child: Container(
+            margin: scrollAreaMargin,
+            alignment: Alignment.topCenter,
+            child: Container(),
+          ),
         ),
       ),
     );
@@ -27,7 +32,11 @@ class ReiriScreen extends ConsumerWidget {
     return Container(
       margin: bottomMargin,
       child: SingleChildScrollView(
-        child: Container(margin: scrollAreaMargin, alignment: Alignment.topCenter, child: content),
+        child: Container(
+          margin: scrollAreaMargin,
+          alignment: Alignment.topCenter,
+          child: content,
+        ),
       ),
     );
   }
@@ -39,7 +48,11 @@ class ReiriScreen extends ConsumerWidget {
         Container(
           margin: bottomMargin,
           child: SingleChildScrollView(
-            child: Container(margin: scrollAreaMargin, alignment: Alignment.topCenter, child: content),
+            child: Container(
+              margin: scrollAreaMargin,
+              alignment: Alignment.topCenter,
+              child: content,
+            ),
           ),
         ),
       ],
@@ -47,7 +60,11 @@ class ReiriScreen extends ConsumerWidget {
   }
 
   Widget fullScreenPanel(Widget content) {
-    return Container(margin: nonScrollAreaMargin, alignment: Alignment.topCenter, child: content);
+    return Container(
+      margin: nonScrollAreaMargin,
+      alignment: Alignment.topCenter,
+      child: content,
+    );
   }
 
   LoadingScreen loading = LoadingScreen(
@@ -64,7 +81,12 @@ class ReiriScreen extends ConsumerWidget {
     loading.hide();
   }
 
-  AppBar appBar(BuildContext context, {String? title, Widget? leading, List<Widget> actions = const []}) {
+  AppBar appBar(
+    BuildContext context, {
+    String? title,
+    Widget? leading,
+    List<Widget> actions = const [],
+  }) {
     title ??= '';
     return AppBar(
       leading:
@@ -84,7 +106,12 @@ class ReiriScreen extends ConsumerWidget {
             },
           ),
       title: Text(title),
-      actions: [...actions, ConnectionStateIcon(), DateTimeIndication(), loading],
+      actions: [
+        ...actions,
+        ConnectionStateIcon(),
+        DateTimeIndication(),
+        loading,
+      ],
       automaticallyImplyLeading: false,
     );
   }
@@ -110,6 +137,7 @@ class ReiriScreen extends ConsumerWidget {
   }
 }
 
+/// Shows the current controller connection state in an app bar.
 class ConnectionStateIcon extends ConsumerWidget {
   ConnectionStateIcon();
 
@@ -120,13 +148,18 @@ class ConnectionStateIcon extends ConsumerWidget {
     if (state == null || state['state'] != 'ready')
       return Container(
         margin: EdgeInsets.all(4),
-        child: ReiriIcons.icon(ReiriIcons.disconnected, width: 20, color: app.color.alert),
+        child: ReiriIcons.icon(
+          ReiriIcons.disconnected,
+          width: 20,
+          color: app.color.alert,
+        ),
       );
     else
       return Container();
   }
 }
 
+/// Displays the current localized date and time.
 class DateTimeIndication extends ConsumerWidget {
   DateTimeIndication();
 
@@ -135,7 +168,12 @@ class DateTimeIndication extends ConsumerWidget {
     final time = ref.watch(controllerTimeProvider);
 
     if (time != null)
-      return Container(margin: EdgeInsets.all(4), child: Text('${app.dateFormat().format(time)} ${app.timeFormat().format(time)}'));
+      return Container(
+        margin: EdgeInsets.all(4),
+        child: Text(
+          '${app.dateFormat().format(time)} ${app.timeFormat().format(time)}',
+        ),
+      );
     else
       return Container();
   }

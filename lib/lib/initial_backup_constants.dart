@@ -1,12 +1,7 @@
 import 'package:reiri_app_core/reiri_app_core.dart';
+import 'package:reiri_db_backup_tool/model/backup_database.dart';
 
-const List<String> kInitialBackupDbFiles = [
-  'history.db',
-  'meter.db',
-  'optime.db',
-  'trend.db',
-  'ppd.db',
-];
+final List<String> kInitialBackupDbFiles = BackupDatabase.fileNames;
 
 const String kInitialBackupDbFolderName = 'DB';
 const String kTempDbFolderName = 'DB_TEMP';
@@ -46,7 +41,7 @@ Future<({int hour, int minute})> loadRecoveryTime() async {
   try {
     final info = await app.loadJson(kRecoveryTimeKey);
     return (
-      hour:   (info['hour']   as num?)?.toInt() ?? kDefaultRecoveryTime.hour,
+      hour: (info['hour'] as num?)?.toInt() ?? kDefaultRecoveryTime.hour,
       minute: (info['minute'] as num?)?.toInt() ?? kDefaultRecoveryTime.minute,
     );
   } catch (_) {
@@ -68,14 +63,9 @@ Future<bool> loadInstantFill() async {
 }
 
 Future<void> markInitialBackupDone(String macaddr, String method) async {
-  await app.storeJson(
-    kInitialBackupDoneKey,
-    {
-      'done': true,
-      'method': method,
-      'updatedAt': DateTime.now().toIso8601String(),
-    },
-    macaddr: macaddr,
-  );
+  await app.storeJson(kInitialBackupDoneKey, {
+    'done': true,
+    'method': method,
+    'updatedAt': DateTime.now().toIso8601String(),
+  }, macaddr: macaddr);
 }
-

@@ -48,4 +48,12 @@ void main() {
     expect(window.to, DateTime(2026, 7, 7, 13, 50, 46));
   });
 
+  test('latest recovery boundary observes controller write grace', () {
+    final readyAt = recoveryBoundaryReadyAt(
+      gapEnd: DateTime(2026, 8, 3, 14, 5, 16),
+      intervalMinutes: 5,
+    );
+
+    expect(readyAt, DateTime(2026, 8, 3, 14, 6));
+  });
 }

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
+import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:reiri_db_backup_tool/lib/app_constant.dart';
 import 'dart:convert';
 
 // this is used for QR cord reading on Android and iOS
 // Show QR code scan screen and get controller info from QR code
+/// Scans controller QR codes using the device camera.
 class QrScannerView extends ConsumerWidget {
   QrScannerView();
 
@@ -76,7 +78,7 @@ class QrScannerView extends ConsumerWidget {
     if (!p) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('No camera permission')));
+      ).showSnackBar(SnackBar(content: Text(app.word('no_camera_permission'))));
     }
   }
 }

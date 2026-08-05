@@ -1,12 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:tray_manager/tray_manager.dart';
 
-/// Manages the system tray icon, tooltip, and context menu.
-///
-/// Call [init] once after [windowManager] is ready.
-/// Call [updateStatus] whenever connection or backup health changes.
+/// Manages the tray icon, tooltip, and menu after window initialization.
 class TrayService with TrayListener {
   TrayService._();
   static final TrayService instance = TrayService._();
@@ -40,28 +38,27 @@ class TrayService with TrayListener {
     await _rebuildContextMenu();
   }
 
-  /// Updates the tray tooltip to reflect the current connection/backup state.
-  ///
-  /// Three icon states are spec'd (colours TBC).  For now all states share the
-  /// same icon; the tooltip distinguishes them.  To add coloured icons later,
-  /// replace the setIcon call with the appropriate asset path.
+  /// Updates the tooltip; status-specific icons are not available yet.
   Future<void> updateStatus({
     required bool isConnected,
     required bool backupHealthy,
   }) async {
     if (!_initialized) return;
 
+    await _rebuildContextMenu();
+
     final String tooltip;
     if (!isConnected) {
-      tooltip = 'Reiri Backup — Disconnected';
+      tooltip = 'Reiri Backup — ${_word('disconnected', 'Disconnected')}';
       // TODO: swap icon to disconnected variant when colour assets are ready
       // await trayManager.setIcon('assets/images/tray_icon_disconnected.ico');
     } else if (!backupHealthy) {
-      tooltip = 'Reiri Backup — Warning: no recent backup';
+      tooltip =
+          'Reiri Backup — ${_word('tray_warning_no_recent_backup', 'Warning: no recent backup')}';
       // TODO: swap icon to warning variant
       // await trayManager.setIcon('assets/images/tray_icon_warning.ico');
     } else {
-      tooltip = 'Reiri Backup — Connected';
+      tooltip = 'Reiri Backup — ${_word('connected', 'Connected')}';
       // await trayManager.setIcon('assets/images/tray_icon.ico');
     }
 
@@ -71,12 +68,22 @@ class TrayService with TrayListener {
   Future<void> _rebuildContextMenu() async {
     final menu = Menu(
       items: [
-        MenuItem(key: 'open', label: 'Open app'),
+        MenuItem(key: 'open', label: _word('open_app', 'Open app')),
         MenuItem.separator(),
-        MenuItem(key: 'exit', label: 'Exit'),
+        MenuItem(key: 'exit', label: _word('exit', 'Exit')),
       ],
     );
     await trayManager.setContextMenu(menu);
+  }
+
+  String _word(String key, String fallback) {
+    try {
+      final value = app.word(key);
+      return value == key ? fallback : value;
+    } catch (_) {
+      // Tray initialization runs before the app string table has loaded.
+      return fallback;
+    }
   }
 
   void dispose() {

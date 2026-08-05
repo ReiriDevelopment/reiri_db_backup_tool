@@ -8,9 +8,10 @@ const _kMaxEntries = 1000000;
 
 final backupLogProvider =
     NotifierProvider<BackupLogNotifier, List<BackupLogEntry>>(
-  BackupLogNotifier.new,
-);
+      BackupLogNotifier.new,
+    );
 
+/// Loads, filters, and persists backup log entries for the selected controller.
 class BackupLogNotifier extends Notifier<List<BackupLogEntry>> {
   String _mac = '';
 
@@ -45,11 +46,9 @@ class BackupLogNotifier extends Notifier<List<BackupLogEntry>> {
 
   Future<void> _persist(List<BackupLogEntry> entries) async {
     try {
-      await app.storeJson(
-        _kStorageKey,
-        {'entries': entries.map((e) => e.toJson()).toList()},
-        macaddr: _mac,
-      );
+      await app.storeJson(_kStorageKey, {
+        'entries': entries.map((e) => e.toJson()).toList(),
+      }, macaddr: _mac);
     } catch (_) {}
   }
 

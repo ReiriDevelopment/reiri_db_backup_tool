@@ -8,6 +8,7 @@ import 'package:reiri_db_backup_tool/lib/qrc_file_reader.dart';
 import 'package:std_widget/tab_selection.dart';
 import 'dart:io';
 
+/// Provides camera, image, and file options for importing controller QR data.
 class QrScanScreen extends ConsumerWidget {
   QrScanScreen({this.fromGallery = false}) {}
   int tabIndex = 0;

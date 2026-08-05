@@ -1,7 +1,12 @@
+/// Identifies whether a log entry came from real-time or recovery backup.
 enum BackupLogType { realtime, recovery }
 
+/// Legacy persisted result field. New backup-history entries are created only
+/// after a database write is confirmed and therefore use
+/// [BackupLogResult.success].
 enum BackupLogResult { success, fail }
 
+/// Stores one persisted backup activity record for display and export.
 class BackupLogEntry {
   const BackupLogEntry({
     required this.timestamp,
@@ -12,8 +17,8 @@ class BackupLogEntry {
     this.details,
   });
 
-  /// When the controller wrote the data (file mod time for real-time;
-  /// earliest record date from the controller response for recovery).
+  /// When the controller record was written (latest confirmed DB record time
+  /// for real-time; earliest record date from the response for recovery).
   final DateTime timestamp;
 
   /// When the app detected and saved the backup event.
@@ -21,12 +26,13 @@ class BackupLogEntry {
   final DateTime? backedUpAt;
 
   final BackupLogType type;
+
+  /// Retained for backward-compatible loading of existing BACKUP_LOG_V1 data.
+  /// The backup-history UI no longer presents this field.
   final BackupLogResult result;
   final String database;
 
-  /// JSON-encoded raw records received from the controller (recovery only).
-  /// Each element is the list the controller returned for that DB type,
-  /// e.g. `[[202606221615,"id",0.12],[...],...]`. Null for real-time entries.
+  /// JSON controller records for recovery entries; null for realtime entries.
   final String? details;
 
   Map<String, dynamic> toJson() => {

@@ -1,13 +1,3 @@
-/// Write intervals per DB type (from system design).
-/// Used to determine whether any records were missed during a disconnect gap.
-const Map<String, Duration> kDbWriteIntervals = {
-  'history.db': Duration(hours: 24), // event-based; 24h conservative threshold
-  'meter.db': Duration(minutes: 15),
-  'optime.db': Duration(minutes: 15),
-  'ppd.db': Duration(minutes: 15),
-  'trend.db': Duration(minutes: 5),
-};
-
 /// A detected gap for a single DB file.
 class GapRange {
   final String dbFile;
@@ -47,17 +37,10 @@ enum FlushStatus { none, pending, inProgress, completed }
 
 /// Persisted state that survives app crashes (stored in backup_metadata.json).
 class BackupMetadata {
-  /// Earliest known start of the current disconnect window.
-  ///
-  /// Once set, this value must not move forward until the next connection
-  /// consumes
-  /// it.  Older app versions also used this field as a rolling heartbeat; the
-  /// loader keeps accepting that representation for backwards compatibility.
+  /// Earliest disconnect time, retained until the next connection consumes it.
   final DateTime? disconnectedAt;
 
-  /// Most recent time the controller was confirmed reachable while real-time
-  /// backup was healthy. Kept separate from [disconnectedAt] so a delayed
-  /// WebSocket disconnect, logout, or widget disposal cannot erase a real gap.
+  /// Latest healthy checkpoint, kept separate from the disconnect boundary.
   final DateTime? lastHealthyAt;
 
   /// When the app most recently connected to the controller.
@@ -66,9 +49,7 @@ class BackupMetadata {
   final BackupState backupState;
   final FlushStatus flushStatus;
 
-  /// One entry per affected DB file with the **merged** time range covering
-  /// all disconnect periods. Used for gap-fill and flush operations — merging
-  /// ensures rows are appended to MAIN in chronological order.
+  /// Merged recovery range for each affected database.
   final List<GapRange> detectedGaps;
 
   /// Every discrete disconnect period accumulated since the last flush.
@@ -78,9 +59,7 @@ class BackupMetadata {
   /// Absolute path to the TEMP DB directory (null when no temp exists).
   final String? tempDbPath;
 
-  /// When true, [HomeScreen] will trigger gap-fill automatically on the first
-  /// connect after an initial FTP/local-import setup, without requiring the
-  /// user to navigate to the recovery page.
+  /// Whether initial setup should run recovery on the first connection.
   final bool autoFill;
 
   const BackupMetadata({

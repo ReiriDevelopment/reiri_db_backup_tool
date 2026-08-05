@@ -15,47 +15,46 @@ import 'package:window_manager/window_manager.dart';
 import 'screen/language_selection_screen.dart';
 
 void main() async {
-  // Run the whole app inside a guarded zone so that unhandled async errors
-  // (e.g. a real-time SQLite write racing against the recovery service closing
-  // the DB handles) are logged instead of terminating the process. The backup
-  // tool must keep running unattended, so an uncaught error should never crash
-  // it. See docs/issues-and-solutions.md.
-  runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+  // Keep unattended backup alive while logging uncaught async failures.
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-    // Framework (build/layout/paint) errors → log, then fall back to the
-    // default handler so they still surface in the console during development.
-    final defaultOnError = FlutterError.onError;
-    FlutterError.onError = (FlutterErrorDetails details) {
-      _logCrash('FlutterError', details.exception, details.stack);
-      defaultOnError?.call(details);
-    };
+      // Framework (build/layout/paint) errors → log, then fall back to the
+      // default handler so they still surface in the console during development.
+      final defaultOnError = FlutterError.onError;
+      FlutterError.onError = (FlutterErrorDetails details) {
+        _logCrash('FlutterError', details.exception, details.stack);
+        defaultOnError?.call(details);
+      };
 
-    // Uncaught errors from the engine / platform dispatcher. Returning true
-    // marks the error as handled so it does not propagate and kill the app.
-    PlatformDispatcher.instance.onError = (error, stack) {
-      _logCrash('PlatformDispatcher', error, stack);
-      return true;
-    };
+      // Uncaught errors from the engine / platform dispatcher. Returning true
+      // marks the error as handled so it does not propagate and kill the app.
+      PlatformDispatcher.instance.onError = (error, stack) {
+        _logCrash('PlatformDispatcher', error, stack);
+        return true;
+      };
 
-    await windowManager.ensureInitialized();
+      await windowManager.ensureInitialized();
 
-    const windowOptions = WindowOptions(
-      title: 'Reiri DB Backup Tool',
-      minimumSize: Size(800, 600),
-      center: true,
-      skipTaskbar: false,
-    );
-    await windowManager.waitUntilReadyToShow(windowOptions);
-    await windowManager.show();
-    await windowManager.focus();
+      const windowOptions = WindowOptions(
+        title: 'Reiri DB Backup Tool',
+        minimumSize: Size(800, 600),
+        center: true,
+        skipTaskbar: false,
+      );
+      await windowManager.waitUntilReadyToShow(windowOptions);
+      await windowManager.show();
+      await windowManager.focus();
 
-    HttpOverrides.global = MyHttpOverrides();
-    runApp(ProviderScope(child: App()));
-  }, (error, stack) {
-    // Any async error not caught anywhere else lands here.
-    _logCrash('Uncaught', error, stack);
-  });
+      HttpOverrides.global = MyHttpOverrides();
+      runApp(ProviderScope(child: App()));
+    },
+    (error, stack) {
+      // Any async error not caught anywhere else lands here.
+      _logCrash('Uncaught', error, stack);
+    },
+  );
 }
 
 /// Records an otherwise-fatal error to the backup log (and console) so the
@@ -71,6 +70,7 @@ void _logCrash(String source, Object error, StackTrace? stack) {
 
 // ── Root app widget ──────────────────────────────────────────────────────────
 
+/// Configures the application theme, window behavior, and top-level routing.
 class App extends ConsumerStatefulWidget {
   const App({super.key});
 
@@ -78,6 +78,7 @@ class App extends ConsumerStatefulWidget {
   ConsumerState<App> createState() => _AppState();
 }
 
+/// Manages application startup, desktop window events, and tray integration.
 class _AppState extends ConsumerState<App> with WindowListener {
   final _navigatorKey = GlobalKey<NavigatorState>();
   bool _firstTime = true;
@@ -142,34 +143,32 @@ class _AppState extends ConsumerState<App> with WindowListener {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Keep Backup Running?'),
-        content: const Text(
-          'Closing this app will stop all background backup. '
-          'It is recommended to keep the app running.',
-        ),
+        title: Text(app.word('keep_backup_running')),
+        content: Text(app.word('close_app_warning')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(app.word('cancel')),
           ),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
               await windowManager.hide();
             },
-            child: const Text('Minimize to Tray'),
+            child: Text(app.word('minimize_to_tray')),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-                foregroundColor: Colors.white),
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               Navigator.pop(ctx);
               TrayService.instance.dispose();
               await windowManager.destroy();
               exit(0);
             },
-            child: const Text('Close Anyway'),
+            child: Text(app.word('close_anyway')),
           ),
         ],
       ),
@@ -231,18 +230,21 @@ class _AppState extends ConsumerState<App> with WindowListener {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
         switchTheme: SwitchThemeData(
-          thumbColor: WidgetStateProperty.resolveWith((states) =>
-              states.contains(WidgetState.selected)
-                  ? Colors.white
-                  : Colors.grey.shade50),
-          trackColor: WidgetStateProperty.resolveWith((states) =>
-              states.contains(WidgetState.selected)
-                  ? lightScheme.primary
-                  : Colors.grey.shade300),
-          trackOutlineColor: WidgetStateProperty.resolveWith((states) =>
-              states.contains(WidgetState.selected)
-                  ? Colors.transparent
-                  : Colors.grey.shade400),
+          thumbColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? Colors.white
+                : Colors.grey.shade50,
+          ),
+          trackColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? lightScheme.primary
+                : Colors.grey.shade300,
+          ),
+          trackOutlineColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? Colors.transparent
+                : Colors.grey.shade400,
+          ),
         ),
         segmentedButtonTheme: SegmentedButtonThemeData(
           style: SegmentedButton.styleFrom(
@@ -267,6 +269,7 @@ class _AppState extends ConsumerState<App> with WindowListener {
 
 // ── Splash screen ────────────────────────────────────────────────────────────
 
+/// Initializes the app and routes the user to the appropriate first screen.
 class SplashScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -297,8 +300,7 @@ class SplashScreen extends ConsumerWidget {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) =>
-                    InitialBackupScreen(initialMac: macaddr),
+                builder: (context) => InitialBackupScreen(initialMac: macaddr),
               ),
             );
           } else {
@@ -319,7 +321,9 @@ class SplashScreen extends ConsumerWidget {
     });
 
     ref.listen(mapDataProvider('app_init'), (_, state) {
-      print('INIT STATUS lang=${state!['LANG']} ctrl=${state['CTRL']} autologin=${state['AUTOLOGIN']}');
+      print(
+        'INIT STATUS lang=${state!['LANG']} ctrl=${state['CTRL']} autologin=${state['AUTOLOGIN']}',
+      );
       if (state['LANG'] == null) {
         Navigator.pushReplacement(
           context,
@@ -331,7 +335,9 @@ class SplashScreen extends ConsumerWidget {
           MaterialPageRoute(builder: (context) => ControllerSelectionScreen()),
         );
       } else if (state['AUTOLOGIN'] == true) {
-        print('[SplashScreen] auto-login: ${app.selectedController?['macaddr']}');
+        print(
+          '[SplashScreen] auto-login: ${app.selectedController?['macaddr']}',
+        );
         final loginAccount = app.loginAccount();
         if (app.createController(
           pointD: true,
@@ -365,6 +371,7 @@ class SplashScreen extends ConsumerWidget {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/// Enables consistent scrolling behavior for desktop pointer devices.
 class MyCustomScrollBehavior extends MaterialScrollBehavior {
   @override
   Set<PointerDeviceKind> get dragDevices => {
@@ -373,6 +380,7 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
   };
 }
 
+/// Accepts controller self-signed certificates for local HTTPS communication.
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {

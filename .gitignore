@@ -17,6 +17,7 @@ CLAUDE.md
 AGENTS.md
 .claude/
 .cursor/
+.codex_tmp/
 
 # IntelliJ related
 *.iml
@@ -40,6 +41,7 @@ AGENTS.md
 .pub/
 /build/
 /coverage/
+**/.gradle/
 
 # Local controller DB snapshots (dev/testing — do not commit customer data)
 history.db

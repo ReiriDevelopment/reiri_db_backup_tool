@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:reiri_db_backup_tool/lib/app_constant.dart';
 import 'package:scan/scan.dart';
 
+/// Reads and decodes a QR code from an image selected from the gallery.
 class QrFromImageGallery {
   static final QrFromImageGallery _instance = QrFromImageGallery._internal();
   factory QrFromImageGallery() => _instance;

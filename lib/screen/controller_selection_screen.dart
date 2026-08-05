@@ -7,6 +7,7 @@ import 'package:std_widget/reiri_icons.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'reiri_screen.dart';
 
+/// Lets the user select the Reiri controller to back up.
 class ControllerSelectionScreen extends ReiriScreen {
   final foundControllers = mapDataProvider('controller');
 
@@ -148,7 +149,8 @@ class ControllerSelectionScreen extends ReiriScreen {
       ),
       child: ListTile(
         title: Text(
-          '${info['name']}: DCP${info['model']} Ver.${info['version']}',
+          '${info['name']}: DCP${info['model']} '
+          '${app.word('version_prefix')}${info['version']}',
         ),
         subtitle: Text('${info['macaddr']}  ${info['ipaddr']}'),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12),

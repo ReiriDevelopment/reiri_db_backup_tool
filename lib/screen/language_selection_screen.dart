@@ -5,6 +5,7 @@ import 'package:reiri_db_backup_tool/widget/radio_menu_list.dart';
 import 'package:std_widget/selector.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
+/// Lets the user choose the application language during setup.
 class LanguageSelectionScreen extends ConsumerWidget {
   LanguageSelectionScreen() {
     app.selectableLang.forEach((lang) {

@@ -4,18 +4,21 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
+import 'package:reiri_db_backup_tool/model/backup_database.dart';
 import 'package:reiri_db_backup_tool/model/backup_log_entry.dart';
 import 'package:reiri_db_backup_tool/provider/backup_log_provider.dart';
 
-const _kAllDbNames = [
-  'history.db',
-  'meter.db',
-  'optime.db',
-  'ppd.db',
-  'trend.db',
-];
+final _kAllDbNames = const [
+  BackupDatabase.history,
+  BackupDatabase.meter,
+  BackupDatabase.optime,
+  BackupDatabase.ppd,
+  BackupDatabase.trend,
+].map((database) => database.fileName).toList(growable: false);
 
+/// Displays searchable backup activity and supports log export.
 class BackupLogView extends ConsumerStatefulWidget {
   final String macAddr;
 
@@ -32,17 +35,19 @@ class BackupLogView extends ConsumerStatefulWidget {
 const _kDisplayCap = 100000;
 const _kPageSize = 20;
 
+/// Manages backup-log filters, pagination, selection, and export actions.
 class _BackupLogViewState extends ConsumerState<BackupLogView> {
   BackupLogType? _typeFilter;
-  BackupLogResult? _resultFilter;
   String? _dbFilter;
   int _shownCount = _kPageSize;
 
   List<BackupLogEntry> _applyFilters(List<BackupLogEntry> entries) {
     return entries
         .where((e) {
+          // Legacy failures came from interval-based verification. The backup
+          // history now contains confirmed database-write events only.
+          if (e.result != BackupLogResult.success) return false;
           if (_typeFilter != null && e.type != _typeFilter) return false;
-          if (_resultFilter != null && e.result != _resultFilter) return false;
           if (_dbFilter != null && e.database != _dbFilter) return false;
           return true;
         })
@@ -72,7 +77,9 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
     String csvRow(List<String> cols) => cols.map(csvCell).join(',');
 
     final buf = StringBuffer();
-    buf.writeln(csvRow(['Backed Up At', 'Record Time', 'Type', 'Result', 'Database', 'Details']));
+    buf.writeln(
+      csvRow(['Backed Up At', 'Record Time', 'Type', 'Database', 'Details']),
+    );
     for (final e in entries) {
       buf.writeln(
         csvRow([
@@ -81,7 +88,6 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
               : '',
           formatDateTime(e.timestamp, includeSeconds: true),
           e.type == BackupLogType.realtime ? 'Real-time' : 'Recovery',
-          e.result == BackupLogResult.success ? 'Success' : 'Fail',
           e.database,
           e.details ?? '',
         ]),
@@ -103,9 +109,12 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
     );
     if (location == null) return;
 
-    final json = const JsonEncoder.withIndent(
-      '  ',
-    ).convert(entries.map((e) => e.toJson()).toList());
+    final exportedEntries = entries.map((entry) {
+      final json = entry.toJson();
+      json.remove('result');
+      return json;
+    }).toList();
+    final json = const JsonEncoder.withIndent('  ').convert(exportedEntries);
 
     var savePath = location.path;
     if (!savePath.toLowerCase().endsWith('.json')) savePath = '$savePath.json';
@@ -128,7 +137,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
             child: Text(
-              'Backup Log',
+              app.word('backup_log'),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -139,19 +148,19 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 2, 24, 0),
             child: Text(
-              'Full history of all backup and recovery events',
+              app.word('backup_log_subtitle'),
               style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             ),
           ),
-          // ── Filter row 1: Type + Result + Export ──────────────────────────
+          // ── Filter row 1: Type + Export ───────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
             child: Row(
               children: [
-                _filterLabel(context, 'TYPE'),
+                _filterLabel(context, app.word('filter_type')),
                 const SizedBox(width: 8),
                 _FilterPill(
-                  label: 'All',
+                  label: app.word('all'),
                   selected: _typeFilter == null,
                   onTap: () => setState(() {
                     _typeFilter = null;
@@ -160,7 +169,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                 ),
                 const SizedBox(width: 4),
                 _FilterPill(
-                  label: 'Real-time',
+                  label: app.word('realtime'),
                   selected: _typeFilter == BackupLogType.realtime,
                   onTap: () => setState(() {
                     _typeFilter = BackupLogType.realtime;
@@ -169,39 +178,10 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                 ),
                 const SizedBox(width: 4),
                 _FilterPill(
-                  label: 'Recovery',
+                  label: app.word('recovery'),
                   selected: _typeFilter == BackupLogType.recovery,
                   onTap: () => setState(() {
                     _typeFilter = BackupLogType.recovery;
-                    _resetShown();
-                  }),
-                ),
-                const SizedBox(width: 20),
-                _filterLabel(context, 'RESULT'),
-                const SizedBox(width: 8),
-                _FilterPill(
-                  label: 'All',
-                  selected: _resultFilter == null,
-                  onTap: () => setState(() {
-                    _resultFilter = null;
-                    _resetShown();
-                  }),
-                ),
-                const SizedBox(width: 4),
-                _FilterPill(
-                  label: 'Success',
-                  selected: _resultFilter == BackupLogResult.success,
-                  onTap: () => setState(() {
-                    _resultFilter = BackupLogResult.success;
-                    _resetShown();
-                  }),
-                ),
-                const SizedBox(width: 4),
-                _FilterPill(
-                  label: 'Fail',
-                  selected: _resultFilter == BackupLogResult.fail,
-                  onTap: () => setState(() {
-                    _resultFilter = BackupLogResult.fail;
                     _resetShown();
                   }),
                 ),
@@ -211,7 +191,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                       ? null
                       : () => _exportJson(filtered),
                   icon: const Icon(Icons.data_object_rounded, size: 15),
-                  label: const Text('Export JSON'),
+                  label: Text(app.word('export_json')),
                   style:
                       OutlinedButton.styleFrom(
                         visualDensity: VisualDensity.compact,
@@ -229,7 +209,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                       ? null
                       : () => _exportCsv(filtered),
                   icon: const Icon(Icons.download_rounded, size: 15),
-                  label: const Text('Export CSV'),
+                  label: Text(app.word('export_csv')),
                   style:
                       OutlinedButton.styleFrom(
                         visualDensity: VisualDensity.compact,
@@ -249,10 +229,10 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
             child: Row(
               children: [
-                _filterLabel(context, 'DATABASE'),
+                _filterLabel(context, app.word('table_database')),
                 const SizedBox(width: 8),
                 _FilterPill(
-                  label: 'All',
+                  label: app.word('all'),
                   selected: _dbFilter == null,
                   onTap: () => setState(() {
                     _dbFilter = null;
@@ -293,11 +273,26 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                       padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
                       child: Row(
                         children: [
-                          _logHeaderCell(context, 'BACKED UP AT', flex: 20),
-                          _logHeaderCell(context, 'RECORD TIME', flex: 20),
-                          _logHeaderCell(context, 'TYPE', flex: 15),
-                          _logHeaderCell(context, 'RESULT', flex: 15),
-                          _logHeaderCell(context, 'DATABASE', flex: 30),
+                          _logHeaderCell(
+                            context,
+                            app.word('log_backed_up_at'),
+                            flex: 20,
+                          ),
+                          _logHeaderCell(
+                            context,
+                            app.word('log_record_time'),
+                            flex: 20,
+                          ),
+                          _logHeaderCell(
+                            context,
+                            app.word('filter_type'),
+                            flex: 20,
+                          ),
+                          _logHeaderCell(
+                            context,
+                            app.word('table_database'),
+                            flex: 40,
+                          ),
                         ],
                       ),
                     ),
@@ -306,7 +301,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                       child: filtered.isEmpty
                           ? Center(
                               child: Text(
-                                'No log entries yet',
+                                app.word('no_log_entries'),
                                 style: TextStyle(
                                   color: cs.onSurfaceVariant,
                                   fontSize: 13,
@@ -331,7 +326,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
                                             SystemMouseCursors.click,
                                           ),
                                         ),
-                                        child: const Text('Load More'),
+                                        child: Text(app.word('load_more')),
                                       ),
                                     ),
                                   );
@@ -382,6 +377,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
   }
 }
 
+/// Renders a compact selectable backup-log filter.
 class _FilterPill extends StatelessWidget {
   final String label;
   final bool selected;
@@ -426,6 +422,7 @@ class _FilterPill extends StatelessWidget {
   }
 }
 
+/// Displays one backup log entry as a table row.
 class _LogRow extends StatelessWidget {
   final BackupLogEntry entry;
   const _LogRow({required this.entry});
@@ -434,7 +431,6 @@ class _LogRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isRealtime = entry.type == BackupLogType.realtime;
-    final isSuccess = entry.result == BackupLogResult.success;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -465,9 +461,9 @@ class _LogRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 15,
+            flex: 20,
             child: _LogBadge(
-              label: isRealtime ? 'Real-time' : 'Recovery',
+              label: app.word(isRealtime ? 'realtime' : 'recovery'),
               color: isRealtime ? Colors.cyan.shade700 : Colors.orange.shade700,
               bg: isRealtime ? Colors.cyan.shade50 : Colors.orange.shade50,
               border: isRealtime
@@ -476,16 +472,7 @@ class _LogRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            flex: 15,
-            child: _LogBadge(
-              label: isSuccess ? 'Success' : 'Fail',
-              color: isSuccess ? Colors.green.shade700 : Colors.red.shade700,
-              bg: isSuccess ? Colors.green.shade50 : Colors.red.shade50,
-              border: isSuccess ? Colors.green.shade200 : Colors.red.shade200,
-            ),
-          ),
-          Expanded(
-            flex: 30,
+            flex: 40,
             child: Text(
               entry.database,
               style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
@@ -497,6 +484,7 @@ class _LogRow extends StatelessWidget {
   }
 }
 
+/// Displays the source type of a backup log entry.
 class _LogBadge extends StatelessWidget {
   final String label;
   final Color color;

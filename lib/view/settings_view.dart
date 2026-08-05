@@ -8,6 +8,7 @@ import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
 import 'package:reiri_db_backup_tool/provider/recovery_provider.dart';
 
+/// Lets the user configure backup storage, recovery, theme, and logout.
 class SettingsView extends ConsumerStatefulWidget {
   final String? backupRootPath;
   final Future<void> Function(String path) onPathChanged;
@@ -24,11 +25,12 @@ class SettingsView extends ConsumerStatefulWidget {
   ConsumerState<SettingsView> createState() => _SettingsViewState();
 }
 
+/// Loads and updates the persisted application settings.
 class _SettingsViewState extends ConsumerState<SettingsView> {
-  bool? _launchOnStartup;   // null = still loading from registry
+  bool? _launchOnStartup; // null = still loading from registry
   bool _autoLogin = false;
-  ({int hour, int minute})? _recoveryTime;  // null = still loading from disk
-  bool? _instantFill;                       // null = still loading from disk
+  ({int hour, int minute})? _recoveryTime; // null = still loading from disk
+  bool? _instantFill; // null = still loading from disk
 
   static const _regValueName = 'ReiriBackup';
   static const _regKey =
@@ -45,7 +47,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
   Future<void> _loadRecoveryTime() async {
     final t = await loadRecoveryTime();
-    if (mounted) setState(() => _recoveryTime = (hour: t.hour, minute: t.minute));
+    if (mounted)
+      setState(() => _recoveryTime = (hour: t.hour, minute: t.minute));
   }
 
   Future<void> _loadInstantFill() async {
@@ -54,10 +57,12 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   }
 
   Future<void> _checkStartupRegistry() async {
-    final result = await Process.run(
-      'reg',
-      ['query', _regKey, '/v', _regValueName],
-    );
+    final result = await Process.run('reg', [
+      'query',
+      _regKey,
+      '/v',
+      _regValueName,
+    ]);
     if (mounted) setState(() => _launchOnStartup = result.exitCode == 0);
   }
 
@@ -65,12 +70,18 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     if (value) {
       final exePath = Platform.resolvedExecutable;
       await Process.run('reg', [
-        'add', _regKey, '/v', _regValueName, '/t', 'REG_SZ', '/d', exePath, '/f',
+        'add',
+        _regKey,
+        '/v',
+        _regValueName,
+        '/t',
+        'REG_SZ',
+        '/d',
+        exePath,
+        '/f',
       ]);
     } else {
-      await Process.run('reg', [
-        'delete', _regKey, '/v', _regValueName, '/f',
-      ]);
+      await Process.run('reg', ['delete', _regKey, '/v', _regValueName, '/f']);
     }
     await _checkStartupRegistry();
   }
@@ -80,17 +91,19 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: current.hour, minute: current.minute),
-      helpText: 'Recovery Schedule Time',
+      helpText: app.word('recovery_schedule_time'),
     );
     if (picked == null || !mounted) return;
     setState(() => _recoveryTime = (hour: picked.hour, minute: picked.minute));
     await storeRecoveryTime(picked.hour, picked.minute);
-    ref.read(recoveryProvider.notifier).updateRecoveryTime(picked.hour, picked.minute);
+    ref
+        .read(recoveryProvider.notifier)
+        .updateRecoveryTime(picked.hour, picked.minute);
   }
 
   Future<void> _pickPath() async {
     final path = await getDirectoryPath(
-      confirmButtonText: 'Select Backup Folder',
+      confirmButtonText: app.word('select_backup_folder'),
     );
     if (path != null && path.isNotEmpty) {
       await widget.onPathChanged(path);
@@ -101,7 +114,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final themeMode = ref.watch(stringDataProvider('theme_mode'));
-    final isDark = themeMode == 'dark' ||
+    final isDark =
+        themeMode == 'dark' ||
         (themeMode != 'light' &&
             MediaQuery.of(context).platformBrightness == Brightness.dark);
 
@@ -116,15 +130,16 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Settings',
+                app.word('settings'),
                 style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
-                'Configure backup preferences and connection',
+                app.word('settings_subtitle'),
                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 24),
@@ -150,16 +165,17 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Backup Storage Path',
+                                      app.word('backup_storage_path'),
                                       style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: cs.onSurface),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: cs.onSurface,
+                                      ),
                                     ),
                                     const SizedBox(height: 3),
                                     Text(
                                       widget.backupRootPath ??
-                                          'Not configured. Tap Browse to set.',
+                                          app.word('not_configured_browse'),
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontFamily: 'monospace',
@@ -175,13 +191,19 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                               const SizedBox(width: 16),
                               OutlinedButton.icon(
                                 onPressed: _pickPath,
-                                icon: const Icon(Icons.folder_open_outlined,
-                                    size: 16),
-                                label: const Text('Browse'),
-                                style: OutlinedButton.styleFrom(
-                                    visualDensity: VisualDensity.compact).copyWith(
-                                  mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
+                                icon: const Icon(
+                                  Icons.folder_open_outlined,
+                                  size: 16,
                                 ),
+                                label: Text(app.word('browse')),
+                                style:
+                                    OutlinedButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                    ).copyWith(
+                                      mouseCursor: const WidgetStatePropertyAll(
+                                        SystemMouseCursors.click,
+                                      ),
+                                    ),
                               ),
                             ],
                           ),
@@ -189,14 +211,18 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                Icon(Icons.warning_amber_rounded,
-                                    size: 14, color: Colors.orange.shade700),
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 14,
+                                  color: Colors.orange.shade700,
+                                ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  'Set your backup folder to enable dashboard DB stats.',
+                                  app.word('set_backup_folder_hint'),
                                   style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.orange.shade700),
+                                    fontSize: 11,
+                                    color: Colors.orange.shade700,
+                                  ),
                                 ),
                               ],
                             ),
@@ -207,16 +233,17 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     _SettingsDivider(),
                     // ── Language ─────────────────────────────────────────────
                     _SettingsTile(
-                      title: 'Language',
-                      subtitle: 'Display language for all UI text',
+                      title: app.word('lang'),
+                      subtitle: app.word('display_language_description'),
                       trailing: DropdownButton<String>(
                         value: app.lang,
                         underline: const SizedBox(),
                         borderRadius: BorderRadius.circular(8),
                         style: TextStyle(
-                            fontSize: 13,
-                            color: cs.onSurface,
-                            fontFamily: 'Poppins'),
+                          fontSize: 13,
+                          color: cs.onSurface,
+                          fontFamily: 'Poppins',
+                        ),
                         onChanged: (val) async {
                           if (val != null) {
                             await app.setLang(val);
@@ -224,18 +251,20 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                           }
                         },
                         items: app.selectableLang
-                            .map((code) => DropdownMenuItem(
-                                  value: code,
-                                  child: Text(app.word(code)),
-                                ))
+                            .map(
+                              (code) => DropdownMenuItem(
+                                value: code,
+                                child: Text(app.word(code)),
+                              ),
+                            )
                             .toList(),
                       ),
                     ),
                     _SettingsDivider(),
                     // ── Dark Mode ────────────────────────────────────────────
                     _SettingsTile(
-                      title: 'Dark Mode',
-                      subtitle: 'Switch between light and dark appearance',
+                      title: app.word('dark_mode'),
+                      subtitle: app.word('dark_mode_description'),
                       trailing: Switch(
                         value: isDark,
                         onChanged: (val) {
@@ -248,15 +277,19 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     _SettingsDivider(),
                     // ── Launch on Windows Startup ────────────────────────────
                     _SettingsTile(
-                      title: 'Launch on Windows Startup',
-                      subtitle: 'Start the app automatically when Windows boots',
+                      title: app.word('launch_on_windows_startup'),
+                      subtitle: app.word('launch_startup_description'),
                       trailing: _launchOnStartup == null
                           ? const SizedBox(
-                              width: 51, height: 31,
+                              width: 51,
+                              height: 31,
                               child: Center(
                                 child: SizedBox(
-                                  width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               ),
                             )
@@ -268,8 +301,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     _SettingsDivider(),
                     // ── Auto-login on Startup ────────────────────────────────
                     _SettingsTile(
-                      title: 'Auto-login on Startup',
-                      subtitle: 'Connect to last-used controller automatically',
+                      title: app.word('auto_login_on_startup'),
+                      subtitle: app.word('auto_login_description'),
                       trailing: Switch(
                         value: _autoLogin,
                         onChanged: (val) async {
@@ -281,35 +314,47 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     _SettingsDivider(),
                     // ── Recovery Mode ────────────────────────────────────────
                     _SettingsTile(
-                      title: 'Recovery Mode',
-                      subtitle: 'Fill missing data immediately on reconnect, or at a scheduled time',
+                      title: app.word('recovery_mode'),
+                      subtitle: app.word('recovery_mode_description'),
                       trailing: _instantFill == null
                           ? const SizedBox(
-                              width: 51, height: 31,
+                              width: 51,
+                              height: 31,
                               child: Center(
                                 child: SizedBox(
-                                  width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
                               ),
                             )
                           : SegmentedButton<bool>(
-                              segments: const [
+                              segments: [
                                 ButtonSegment(
                                   value: true,
-                                  label: Text('Immediate'),
-                                  icon: Icon(Icons.flash_on_rounded, size: 14),
+                                  label: Text(app.word('immediate')),
+                                  icon: const Icon(
+                                    Icons.flash_on_rounded,
+                                    size: 14,
+                                  ),
                                 ),
                                 ButtonSegment(
                                   value: false,
-                                  label: Text('Scheduled'),
-                                  icon: Icon(Icons.schedule_rounded, size: 14),
+                                  label: Text(app.word('scheduled')),
+                                  icon: const Icon(
+                                    Icons.schedule_rounded,
+                                    size: 14,
+                                  ),
                                 ),
                               ],
                               selected: {_instantFill!},
                               style: ButtonStyle(
                                 visualDensity: VisualDensity.compact,
-                                mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
+                                mouseCursor: const WidgetStatePropertyAll(
+                                  SystemMouseCursors.click,
+                                ),
                               ),
                               onSelectionChanged: (s) async {
                                 final val = s.first;
@@ -321,27 +366,33 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                     _SettingsDivider(),
                     // ── Recovery Schedule Time ───────────────────────────────
                     _SettingsTile(
-                      title: 'Recovery Schedule Time',
+                      title: app.word('recovery_schedule_time'),
                       subtitle: _instantFill == true
-                          ? 'Not used — immediate mode is active'
-                          : 'Daily time to merge gap recovery data into backup',
+                          ? app.word('immediate_mode_active')
+                          : app.word('recovery_schedule_description'),
                       trailing: OutlinedButton(
-                        onPressed: (_recoveryTime == null || _instantFill == true)
+                        onPressed:
+                            (_recoveryTime == null || _instantFill == true)
                             ? null
                             : () => _pickRecoveryTime(context),
-                        style: OutlinedButton.styleFrom(
-                            visualDensity: VisualDensity.compact).copyWith(
-                          mouseCursor: WidgetStateProperty.resolveWith((s) =>
-                              s.contains(WidgetState.disabled)
-                                  ? SystemMouseCursors.basic
-                                  : SystemMouseCursors.click),
-                        ),
+                        style:
+                            OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                            ).copyWith(
+                              mouseCursor: WidgetStateProperty.resolveWith(
+                                (s) => s.contains(WidgetState.disabled)
+                                    ? SystemMouseCursors.basic
+                                    : SystemMouseCursors.click,
+                              ),
+                            ),
                         child: Text(
                           _recoveryTime == null
                               ? '--:--'
                               : '${_recoveryTime!.hour.toString().padLeft(2, '0')}:${_recoveryTime!.minute.toString().padLeft(2, '0')}',
                           style: const TextStyle(
-                              fontFamily: 'monospace', fontSize: 13),
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ),
@@ -354,12 +405,16 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 child: FilledButton.icon(
                   onPressed: widget.onLogout,
                   icon: const Icon(Icons.logout_rounded, size: 16),
-                  label: const Text('Logout'),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: Colors.red.shade600,
-                      foregroundColor: Colors.white).copyWith(
-                    mouseCursor: const WidgetStatePropertyAll(SystemMouseCursors.click),
-                  ),
+                  label: Text(app.word('logout')),
+                  style:
+                      FilledButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        foregroundColor: Colors.white,
+                      ).copyWith(
+                        mouseCursor: const WidgetStatePropertyAll(
+                          SystemMouseCursors.click,
+                        ),
+                      ),
                 ),
               ),
             ],
@@ -370,6 +425,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
   }
 }
 
+/// Renders a labeled settings row with optional control content.
 class _SettingsTile extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -395,15 +451,15 @@ class _SettingsTile extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: cs.onSurface),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style:
-                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -416,6 +472,7 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+/// Separates adjacent settings rows.
 class _SettingsDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

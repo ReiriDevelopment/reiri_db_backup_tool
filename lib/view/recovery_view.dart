@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:reiri_app_core/reiri_app_core.dart';
 
 import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/provider/recovery_provider.dart';
 
+/// Displays detected database gaps and current recovery progress.
 class RecoveryView extends ConsumerWidget {
   const RecoveryView({super.key});
 
@@ -29,7 +31,7 @@ class RecoveryView extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Recovery',
+                        app.word('recovery'),
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -38,7 +40,7 @@ class RecoveryView extends ConsumerWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Detect and recover missing record periods from the controller',
+                        app.word('recovery_subtitle'),
                         style: TextStyle(
                           fontSize: 13,
                           color: cs.onSurfaceVariant,
@@ -47,19 +49,10 @@ class RecoveryView extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
-                _ScanButton(state: state),
               ],
             ),
           ),
           const SizedBox(height: 16),
-
-          // ── Status banner when TEMP DB is active ────────────────────────────
-          // if (state.backupState == BackupState.realtimeTemp)
-          //   Padding(
-          //     padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          //     child: _TempDbBanner(isFlushing: state.isFlushing, ref: ref),
-          //   ),
 
           // ── Gap table / loading overlay / empty state ───────────────────────
           Expanded(
@@ -83,45 +76,9 @@ class RecoveryView extends ConsumerWidget {
 
 // ── Scan button ───────────────────────────────────────────────────────────────
 
-class _ScanButton extends ConsumerWidget {
-  final RecoveryState state;
-  const _ScanButton({required this.state});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return FilledButton.icon(
-      onPressed: state.isScanning
-          ? null
-          : () => ref.read(recoveryProvider.notifier).scanForGaps(),
-      icon: state.isScanning
-          ? const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : const Icon(Icons.search_rounded, size: 16),
-      label: Text(state.isScanning ? 'Scanning...' : 'Scan for Gaps'),
-      style:
-          FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF0BAEC7),
-            foregroundColor: Colors.white,
-            visualDensity: VisualDensity.compact,
-          ).copyWith(
-            mouseCursor: WidgetStateProperty.resolveWith(
-              (s) => s.contains(WidgetState.disabled)
-                  ? SystemMouseCursors.basic
-                  : SystemMouseCursors.click,
-            ),
-          ),
-    );
-  }
-}
-
 // ── Gap table ─────────────────────────────────────────────────────────────────
 
+/// Displays missing database periods in a structured table.
 class _GapTable extends StatelessWidget {
   final List<GapRange> periods;
   final DateTime? scheduledAt;
@@ -153,6 +110,7 @@ class _GapTable extends StatelessWidget {
   }
 }
 
+/// Renders column labels for the missing-period table.
 class _GapTableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -166,15 +124,22 @@ class _GapTableHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
       child: Row(
         children: [
-          Expanded(flex: 22, child: Text('DATABASE', style: style)),
+          Expanded(
+            flex: 22,
+            child: Text(app.word('table_database'), style: style),
+          ),
           Expanded(
             flex: 38,
-            child: Text('MISSING RECORD PERIOD', style: style),
+            child: Text(app.word('table_missing_record_period'), style: style),
           ),
-          Expanded(flex: 16, child: Text('DURATION', style: style)),
+          Expanded(flex: 16, child: Text(app.word('duration'), style: style)),
           Expanded(
             flex: 24,
-            child: Text('SCHEDULED', style: style, textAlign: TextAlign.end),
+            child: Text(
+              app.word('scheduled'),
+              style: style,
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),
@@ -182,6 +147,7 @@ class _GapTableHeader extends StatelessWidget {
   }
 }
 
+/// Displays one missing database period and its recovery schedule.
 class _GapRow extends StatelessWidget {
   final GapRange gap;
   final DateTime? scheduledAt;
@@ -194,16 +160,21 @@ class _GapRow extends StatelessWidget {
     final String durationLabel;
     final Color chipColor;
     if (dur.inDays >= 3) {
-      durationLabel = '${dur.inDays} days';
+      durationLabel = '${dur.inDays} ${app.word('days')}';
       chipColor = Colors.red.shade600;
     } else if (dur.inDays >= 1) {
-      durationLabel = '${dur.inDays} ${dur.inDays == 1 ? "day" : "days"}';
+      durationLabel =
+          '${dur.inDays} ${app.word(dur.inDays == 1 ? 'day' : 'days')}';
       chipColor = Colors.orange.shade600;
     } else if (dur.inHours >= 1) {
-      durationLabel = '${dur.inHours}h ${dur.inMinutes.remainder(60)}m';
+      durationLabel =
+          '${dur.inHours}${app.word('duration_hours')} '
+          '${dur.inMinutes.remainder(60)}${app.word('duration_minutes')}';
       chipColor = Colors.amber.shade700;
     } else {
-      durationLabel = dur.inMinutes == 0 ? '<1m' : '${dur.inMinutes}m';
+      durationLabel = dur.inMinutes == 0
+          ? '<1${app.word('duration_minutes')}'
+          : '${dur.inMinutes}${app.word('duration_minutes')}';
       chipColor = Colors.amber.shade700;
     }
 
@@ -277,6 +248,7 @@ class _GapRow extends StatelessWidget {
 
 // ── Flushing overlay ──────────────────────────────────────────────────────────
 
+/// Blocks recovery controls while showing the active flush step.
 class _FlushingOverlay extends StatelessWidget {
   final String? step;
   const _FlushingOverlay({this.step});
@@ -304,7 +276,7 @@ class _FlushingOverlay extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Text(
-              'Recovering missing data',
+              app.word('recovering_missing_data'),
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -328,6 +300,7 @@ class _FlushingOverlay extends StatelessWidget {
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
+/// Explains whether recovery is clear or has not been scanned yet.
 class _EmptyState extends StatelessWidget {
   final BackupState backupState;
   const _EmptyState({required this.backupState});
@@ -347,7 +320,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            isMain ? 'No missing data detected' : 'No gaps found',
+            app.word(isMain ? 'no_missing_data_detected' : 'no_gaps_found'),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -357,8 +330,8 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             isMain
-                ? 'All databases are up to date. Real-time backup is active.'
-                : 'Press "Scan for Gaps" to check for missing records.',
+                ? app.word('all_databases_up_to_date')
+                : app.word('recovery_subtitle'),
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
             textAlign: TextAlign.center,
           ),

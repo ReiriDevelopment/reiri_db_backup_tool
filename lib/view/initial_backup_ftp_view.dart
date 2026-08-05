@@ -9,6 +9,7 @@ import 'package:reiri_db_backup_tool/lib/db_latest_probe.dart';
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 
+/// Downloads the initial controller database set to a selected local folder.
 class InitialBackupFtpView extends StatefulWidget {
   const InitialBackupFtpView({
     super.key,
@@ -23,12 +24,14 @@ class InitialBackupFtpView extends StatefulWidget {
     String methodValue,
     String backupPath, {
     List<GapRange> initialGaps,
-  }) onCompleted;
+  })
+  onCompleted;
 
   @override
   State<InitialBackupFtpView> createState() => _InitialBackupFtpViewState();
 }
 
+/// Manages FTP download selection, progress, validation, and completion.
 class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
   String? _backupPath;
   bool _isDownloading = false;
@@ -57,7 +60,7 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
     if (widget.controllerIp.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Controller IP is not available.')),
+        SnackBar(content: Text(app.word('controller_ip_unavailable'))),
       );
       return;
     }
@@ -81,7 +84,7 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
     try {
       ftp = FTPConnect(widget.controllerIp, user: 'reiri', pass: 'reiri_logiN');
       if (!await ftp.connect()) {
-        throw Exception('FTP connect failed');
+        throw Exception(app.word('ftp_connect_failed'));
       }
       await ftp.setTransferType(TransferType.binary);
       await ftp.changeDirectory('/var/www/db');
@@ -123,27 +126,23 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
 
       if (!mounted) return;
 
-      // Boundary-timing safeguard: an FTP download takes seconds, during which
-      // the controller may have crossed a 5/15-min write boundary (or written
-      // the new row after the file's SQLite page was already streamed). Probe
-      // the just-downloaded copy and seed any per-file gap so HomeScreen's
-      // recovery flow fetches the missing record(s) into TEMP, then merges.
+      // Probe again because a write boundary may pass during the download.
+      final ftpCompletedAt = DateTime.now();
       final probe = await probeSourceFolder(
         sourceFolder: dbDir.path,
         dbFiles: kInitialBackupDbFiles,
-        now: DateTime.now(),
+        now: ftpCompletedAt,
       );
-      final initialGaps = probeResultsToGaps(probe, now: DateTime.now());
+      final initialGaps = addFtpTrendOverlap(
+        probeResultsToGaps(probe, now: ftpCompletedAt),
+        completedAt: ftpCompletedAt,
+      );
 
-      await widget.onCompleted(
-        'ftp',
-        _backupPath!,
-        initialGaps: initialGaps,
-      );
+      await widget.onCompleted('ftp', _backupPath!, initialGaps: initialGaps);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('FTP download failed: $e')),
+        SnackBar(content: Text('${app.word('ftp_download_failed')}: $e')),
       );
     } finally {
       try {
@@ -169,14 +168,14 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Backup path: not selected',
+                  app.word('backup_path_not_selected'),
                   style: TextStyle(color: app.color.inactive, fontSize: 13),
                 ),
               ),
               TextButton.icon(
                 onPressed: _isDownloading ? null : _pickBackupPath,
                 icon: const Icon(Icons.folder_open),
-                label: const Text('Select Path'),
+                label: Text(app.word('select_path')),
                 style: const ButtonStyle(
                   mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
                 ),
@@ -199,7 +198,7 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
                 style: const ButtonStyle(
                   mouseCursor: WidgetStatePropertyAll(SystemMouseCursors.click),
                 ),
-                child: const Text('Change'),
+                child: Text(app.word('change')),
               ),
             ],
           ),
@@ -209,12 +208,13 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
         ElevatedButton.icon(
           onPressed: _canStart ? _startDownload : null,
           icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('Start FTP Download'),
+          label: Text(app.word('start_ftp_download')),
           style: ElevatedButton.styleFrom().copyWith(
-            mouseCursor: WidgetStateProperty.resolveWith((s) =>
-                s.contains(WidgetState.disabled)
-                    ? SystemMouseCursors.basic
-                    : SystemMouseCursors.click),
+            mouseCursor: WidgetStateProperty.resolveWith(
+              (s) => s.contains(WidgetState.disabled)
+                  ? SystemMouseCursors.basic
+                  : SystemMouseCursors.click,
+            ),
           ),
         ),
 

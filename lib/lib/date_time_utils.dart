@@ -1,3 +1,5 @@
+import 'package:reiri_app_core/reiri_app_core.dart';
+
 /// Converts the 12-digit DB date integer `YYYYMMDDHHmm` to a [DateTime].
 DateTime dbIntToDateTime(int date) {
   final year = date ~/ 100000000;
@@ -14,7 +16,7 @@ DateTime dbIntToDateTime(int date) {
 /// Formats a date as `dd Mon HH:mm`, optionally including seconds.
 String formatDateTime(DateTime date, {bool includeSeconds = false}) {
   final day = date.day.toString().padLeft(2, '0');
-  final month = _shortMonths[date.month - 1];
+  final month = _dateWord('mon${date.month}');
   final hour = date.hour.toString().padLeft(2, '0');
   final minute = date.minute.toString().padLeft(2, '0');
   final second = includeSeconds
@@ -33,23 +35,35 @@ String formatScheduledDateTime(DateTime date, {DateTime? now}) {
   final hour = date.hour.toString().padLeft(2, '0');
   final minute = date.minute.toString().padLeft(2, '0');
   if (!isToday) {
-    return '${_shortMonths[date.month - 1]} ${date.day} $hour:$minute';
+    return '${_dateWord('mon${date.month}')} ${date.day} $hour:$minute';
   }
-  final label = date.hour >= 18 ? 'Tonight' : 'Today';
+  final label = _dateWord(date.hour >= 18 ? 'tonight' : 'today');
   return '$label $hour:$minute';
 }
 
-const _shortMonths = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+String _dateWord(String key) {
+  try {
+    final value = app.word(key);
+    if (value != key) return value;
+  } catch (_) {
+    // Unit tests call these pure formatting helpers before app.init().
+  }
+
+  return switch (key) {
+    'today' => 'Today',
+    'tonight' => 'Tonight',
+    'mon1' => 'Jan',
+    'mon2' => 'Feb',
+    'mon3' => 'Mar',
+    'mon4' => 'Apr',
+    'mon5' => 'May',
+    'mon6' => 'Jun',
+    'mon7' => 'Jul',
+    'mon8' => 'Aug',
+    'mon9' => 'Sep',
+    'mon10' => 'Oct',
+    'mon11' => 'Nov',
+    'mon12' => 'Dec',
+    _ => key,
+  };
+}

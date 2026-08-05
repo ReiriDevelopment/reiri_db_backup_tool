@@ -10,6 +10,7 @@ import 'package:std_widget/selector.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'controller_selection_screen.dart';
 
+/// Authenticates with the selected controller and starts the backup workflow.
 class LoginScreen extends ReiriScreen {
   Map<String, dynamic>? _controller;
   // these 2 variable store user input of user name and password
@@ -132,13 +133,6 @@ class LoginScreen extends ReiriScreen {
     return Scaffold(
       body: Column(
         children: [
-          // Align(
-          //   alignment: Alignment.topLeft,
-          //   child: Padding(
-          //     padding: const EdgeInsets.only(top: 20, left: 20),
-          //     child: Image.asset('assets/images/ReiriLogoB.png', width: 100),
-          //   ),
-          // ),
           Expanded(
             child: Center(
               child: Column(
@@ -150,16 +144,18 @@ class LoginScreen extends ReiriScreen {
                         TextSpan(
                           text: 'Reiri ',
                           style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 28),
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 28,
+                          ),
                         ),
                         TextSpan(
                           text: 'DB Backup',
                           style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 28),
+                            color: Theme.of(context).colorScheme.onSurface,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 28,
+                          ),
                         ),
                       ],
                     ),
@@ -180,7 +176,8 @@ class LoginScreen extends ReiriScreen {
                     },
                   ),
                   Text(
-                    'DCP${_controller?['model']} Ver.${_controller?['version']}',
+                    'DCP${_controller?['model']} '
+                    '${app.word('version_prefix')}${_controller?['version']}',
                   ), // model version
                   userInput,
                   passwdInput,
@@ -239,7 +236,7 @@ class LoginScreen extends ReiriScreen {
                     ),
                   ),
                   Text(
-                    'Ver.$APP_VER',
+                    '${app.word('version_prefix')}$APP_VER',
                     style: TextStyle(color: app.color.inactive, fontSize: 11),
                   ),
                   Text(app.word(loginFailReason['reason'] ?? '')),

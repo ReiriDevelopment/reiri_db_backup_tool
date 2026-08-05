@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/lib/recovery_time_window.dart';
+import 'package:reiri_db_backup_tool/model/backup_database.dart';
+import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/service/file_log_service.dart';
 
 const _kMetadataFileName = 'backup_metadata.json';
@@ -56,11 +57,7 @@ class BackupMetadataService {
     await _write(metadata);
   }
 
-  /// Wipes all persisted recovery state back to an empty baseline.
-  ///
-  /// Called when a fresh initial backup establishes a new baseline, so stale
-  /// gaps or an interrupted TEMP flush left over from a previous install do not
-  /// carry over and light up the Recovery tab on a clean start.
+  /// Clears persisted recovery state after a fresh initial backup.
   Future<void> reset() async {
     await save(BackupMetadata.empty());
   }
@@ -72,11 +69,7 @@ class BackupMetadataService {
     await save(updated);
   }
 
-  /// Records the earliest plausible start of a disconnect window.
-  ///
-  /// Repeated calls are intentionally idempotent: delayed WebSocket events,
-  /// logout, and `dispose()` must never move an existing gap forward. The last
-  /// healthy heartbeat is used as a conservative lower bound.
+  /// Records the earliest disconnect boundary without moving an existing gap.
   Future<void> recordDisconnect({DateTime? at}) async {
     final observedAt = at ?? DateTime.now();
     final heartbeat = _current.lastHealthyAt;
@@ -91,14 +84,8 @@ class BackupMetadataService {
     await save(updated);
   }
 
-  /// Records the new connection time and computes gaps per DB type.
-  ///
-  /// New gaps are **merged** with any existing scheduled gaps so that gaps
-  /// from a previous session (e.g. logged out before recovery ran) are not
-  /// lost when the user logs back in.
-  ///
-  /// Returns only the newly detected [GapRange]s (may be empty even when
-  /// merged gaps exist from a prior session).
+  /// Records a connection and merges new gaps with pending recovery work.
+  /// Returns only the newly detected gaps.
   Future<List<GapRange>> recordConnect(DateTime tConnect) async {
     final newGaps = _computeGaps(tConnect);
     final mergedGaps = _mergeGaps(_current.detectedGaps, newGaps);
@@ -120,9 +107,7 @@ class BackupMetadataService {
     return newGaps;
   }
 
-  /// Merges [incoming] gaps into [existing] gaps.
-  /// - Same DB file → extend the time range to cover both windows.
-  /// - New DB file  → append as a new entry.
+  /// Merges ranges by database, appending previously unseen databases.
   static List<GapRange> _mergeGaps(
     List<GapRange> existing,
     List<GapRange> incoming,
@@ -146,9 +131,7 @@ class BackupMetadataService {
   }
 
   List<GapRange> _computeGaps(DateTime tConnect) {
-    // Prefer the recorded disconnect time; fall back to the previous tConnect
-    // (conservative: assumes disconnected immediately after last session ended).
-    // If neither exists this is the very first connection — no gap possible.
+    // Fall back through the last healthy connection; no timestamp means first run.
     final gapStart =
         _current.disconnectedAt ?? _current.lastHealthyAt ?? _current.tConnect;
     if (gapStart == null) {
@@ -162,48 +145,46 @@ class BackupMetadataService {
       '[Recovery] _computeGaps: gapStart=$gapStart  tConnect=$tConnect  duration=${tConnect.difference(gapStart).inMinutes}min',
     );
 
-    // Check interval-based DBs first (all except history).
-    final intervalDbFiles = kDbWriteIntervals.keys
-        .where((f) => f != 'history.db')
-        .toList();
-
+    // Check interval-based DBs first (all except event-based history).
     final gaps = <GapRange>[];
-    for (final dbFile in intervalDbFiles) {
-      final missed = _wroteInGap(dbFile, gapStart, tConnect);
+    for (final database in BackupDatabase.gapDetectionOrder) {
+      final missed = _wroteInGap(database, gapStart, tConnect);
       if (missed) {
-        gaps.add(GapRange(dbFile: dbFile, start: gapStart, end: tConnect));
-        FileLogService().log('[Recovery]   MISS $dbFile');
+        gaps.add(
+          GapRange(dbFile: database.fileName, start: gapStart, end: tConnect),
+        );
+        FileLogService().log('[Recovery]   MISS ${database.fileName}');
       } else {
-        FileLogService().log('[Recovery]   OK   $dbFile');
+        FileLogService().log('[Recovery]   OK   ${database.fileName}');
       }
     }
 
-    // History is event-based and can change at any moment, so every actual
-    // disconnect window is potentially missing history even when it did not
-    // cross an interval-database boundary.
+    // Any disconnect may miss event-based history.
+    const history = BackupDatabase.history;
     if (tConnect.isAfter(gapStart)) {
-      gaps.add(GapRange(dbFile: 'history.db', start: gapStart, end: tConnect));
+      gaps.add(
+        GapRange(dbFile: history.fileName, start: gapStart, end: tConnect),
+      );
       FileLogService().log(
-        '[Recovery]   MISS history.db (start=disconnectedAt=$gapStart)',
+        '[Recovery]   MISS ${history.fileName} '
+        '(start=disconnectedAt=$gapStart)',
       );
     } else {
       FileLogService().log(
-        '[Recovery]   OK   history.db (empty disconnect window)',
+        '[Recovery]   OK   ${history.fileName} (empty disconnect window)',
       );
     }
 
     return gaps;
   }
 
-  /// Returns true if at least one scheduled write point falls inside the gap
-  /// (gapStart, tConnect).
-  ///
-  /// Interval-based DBs (trend 5 min, meter/ppd/optime 15 min) write at fixed
-  /// clock boundaries (:00, :05, :10 … for trend; :00, :15, :30, :45 for
-  /// others). We find the first boundary strictly after [gapStart] and check
-  /// whether it falls before [tConnect].
-  bool _wroteInGap(String dbFile, DateTime gapStart, DateTime tConnect) {
-    final intervalMin = kDbWriteIntervals[dbFile]!.inMinutes;
+  /// Whether a scheduled write boundary may fall inside the gap.
+  bool _wroteInGap(
+    BackupDatabase database,
+    DateTime gapStart,
+    DateTime tConnect,
+  ) {
+    final intervalMin = database.interval!.inMinutes;
     final previousWrite = previousWriteBoundary(gapStart, intervalMin);
     final missed = scheduledWriteMayBeMissed(
       gapStart: gapStart,
@@ -211,14 +192,14 @@ class BackupMetadataService {
       intervalMinutes: intervalMin,
     );
     FileLogService().log(
-      '[Recovery]     $dbFile: previous boundary = $previousWrite  reconnect = $tConnect  grace=${kControllerWriteGrace.inSeconds}s  missed=$missed',
+      '[Recovery]     ${database.fileName}: previous boundary = '
+      '$previousWrite  reconnect = $tConnect  '
+      'grace=${kControllerWriteGrace.inSeconds}s  missed=$missed',
     );
     return missed;
   }
 
-  /// Records that TEMP DB is the active write target for gap recovery.
-  /// The flush has NOT started yet — use [markFlushInProgress] only when
-  /// [RecoveryService._doFlush] actually begins executing.
+  /// Marks TEMP as active while leaving the coordinated flush pending.
   Future<void> saveTempPath(String tempDbPath) async {
     final updated = _current.copyWith(
       tempDbPath: tempDbPath,
@@ -227,13 +208,22 @@ class BackupMetadataService {
     await save(updated);
   }
 
-  /// Marks that the TEMP→MAIN flush is actively executing.  This is the
-  /// checkpoint that [RecoveryService.init] uses to detect a crash-interrupted
-  /// flush on the next startup.  Call only at the very start of [_doFlush].
+  /// Checkpoints an active TEMP-to-MAIN flush for crash recovery.
   Future<void> markFlushInProgress(String tempDbPath) async {
     final updated = _current.copyWith(
       tempDbPath: tempDbPath,
       flushStatus: FlushStatus.inProgress,
+    );
+    await save(updated);
+  }
+
+  /// Returns an interrupted/failed flush to the retryable pending state while
+  /// preserving every gap and the TEMP write target.
+  Future<void> markFlushPending(String tempDbPath) async {
+    final updated = _current.copyWith(
+      tempDbPath: tempDbPath,
+      flushStatus: FlushStatus.pending,
+      backupState: BackupState.realtimeTemp,
     );
     await save(updated);
   }

@@ -7,10 +7,9 @@ import 'package:webview_windows/webview_windows.dart';
 import 'dart:async';
 import 'dart:io';
 
-// this is used for Windows app
-// Open WebView to access QR code reader page
-// When QR code is detected, sage data to *.qrc file in downloads folder
+// Windows WebView that saves scanned controller data as a .qrc download.
 
+/// Opens the controller QR workflow in an embedded web view.
 class QrWebView extends ConsumerStatefulWidget {
   final bool isGallery;
 
@@ -20,6 +19,7 @@ class QrWebView extends ConsumerStatefulWidget {
   ConsumerState<QrWebView> createState() => _QrWebViewState();
 }
 
+/// Manages web-view navigation and extracted controller QR data.
 class _QrWebViewState extends ConsumerState<QrWebView> {
   final WebviewController _controller = WebviewController();
 
@@ -49,7 +49,7 @@ class _QrWebViewState extends ConsumerState<QrWebView> {
     }
 
     await _controller.loadUrl(url);
-    
+
     if (!mounted) return;
     setState(() {
       _initialized = true;
@@ -61,7 +61,10 @@ class _QrWebViewState extends ConsumerState<QrWebView> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Webview(_controller, permissionRequested: (a, b, c) => WebviewPermissionDecision.allow);
+    return Webview(
+      _controller,
+      permissionRequested: (a, b, c) => WebviewPermissionDecision.allow,
+    );
   }
 
   void close() {
@@ -83,7 +86,12 @@ class _QrWebViewState extends ConsumerState<QrWebView> {
         Container(
           width: 320,
           margin: const EdgeInsets.all(10),
-          child: Text(ready ? app.word(widget.isGallery ? 'qr_scaned_gallery' : 'qr_scaned') : '', textAlign: TextAlign.center),
+          child: Text(
+            ready
+                ? app.word(widget.isGallery ? 'qr_scaned_gallery' : 'qr_scaned')
+                : '',
+            textAlign: TextAlign.center,
+          ),
         ),
       ],
     );

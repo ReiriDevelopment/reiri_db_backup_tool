@@ -1,6 +1,4 @@
-/// Controller database writes can arrive shortly after their nominal clock
-/// boundary. A disconnect inside this grace period is treated conservatively
-/// as potentially missing that boundary's write.
+/// Treat disconnects near a write boundary as potentially missing its record.
 const Duration kControllerWriteGrace = Duration(minutes: 1);
 
 /// Returns the latest clock boundary less than or equal to [from].
@@ -16,13 +14,8 @@ DateTime previousWriteBoundary(DateTime from, int intervalMinutes) {
   );
 }
 
-/// Returns whether a scheduled controller push may have occurred while the
-/// connection was unavailable.
-///
-/// In addition to boundaries strictly inside the gap, this includes the
-/// boundary immediately before [gapStart] when the disconnect began within
-/// [grace] of that boundary. In field logs, writes stamped at `13:30` were
-/// delivered around `13:45:58`, so exact-boundary checks lost these records.
+/// Whether an unavailable window may contain a scheduled push.
+/// [grace] includes delayed delivery from the preceding boundary.
 bool scheduledWriteMayBeMissed({
   required DateTime gapStart,
   required DateTime reconnectAt,
@@ -38,6 +31,16 @@ bool scheduledWriteMayBeMissed({
   return !next.isAfter(reconnectAt);
 }
 
+/// Earliest time the controller's latest interval batch should be complete.
+DateTime recoveryBoundaryReadyAt({
+  required DateTime gapEnd,
+  required int intervalMinutes,
+  Duration grace = kControllerWriteGrace,
+}) => previousWriteBoundary(
+  gapEnd,
+  intervalMinutes,
+).add(grace);
+
 /// Controller request bounds for one interval-database recovery period.
 class RecoveryRequestWindow {
   const RecoveryRequestWindow({required this.from, required this.to});
@@ -46,12 +49,8 @@ class RecoveryRequestWindow {
   final DateTime to;
 }
 
-/// Builds conservative controller `dbBackup` bounds.
-///
-/// Meter, optime, and PPD packets are delivered on a boundary but carry the
-/// previous interval's timestamp. Their lower bound therefore backs up one
-/// additional interval. The controller upper bound is exclusive, so [to]
-/// extends by one interval.
+/// Builds conservative controller request bounds.
+/// Accumulated DBs include the prior interval; [to] is exclusive.
 RecoveryRequestWindow intervalRecoveryWindow({
   required String dbType,
   required DateTime gapStart,

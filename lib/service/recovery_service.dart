@@ -6,6 +6,7 @@ import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
+import 'package:reiri_db_backup_tool/model/backup_database.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/service/backup_metadata_service.dart';
 import 'package:reiri_db_backup_tool/service/file_log_service.dart';
@@ -41,9 +42,7 @@ class RecoveryService {
   // leaving a stale optime.db-journal).
   Future<void> _opChain = Future.value();
 
-  /// Runs [action] after all previously-queued operations finish, so structural
-  /// DB work is strictly serialized. Errors in one action do not break the
-  /// chain for the next.
+  /// Queues [action] without letting an earlier failure break the chain.
   Future<T> _synchronized<T>(Future<T> Function() action) {
     final completer = Completer<T>();
     final prev = _opChain;
@@ -66,10 +65,13 @@ class RecoveryService {
 
     await _meta.init(_macDir);
 
-    // Resume an in-progress flush that was interrupted by a crash.
+    // Interrupted recovery returns to pending until the controller is ready.
+    // A TEMP-only merge could clear gaps before missing data is fetched.
     if (_meta.current.flushStatus == FlushStatus.inProgress) {
-      FileLogService().log('[Recovery] Resuming interrupted flush on startup');
-      await _synchronized(_doFlush);
+      FileLogService().log(
+        '[Recovery] Interrupted interleaved flush found; queued for retry',
+      );
+      await _meta.markFlushPending(_tempDbDir);
     }
   }
 
@@ -101,10 +103,7 @@ class RecoveryService {
     final allGaps = _meta.current.detectedGaps;
 
     if (allGaps.isNotEmpty) {
-      // Record that TEMP is the active write target. Keep flushStatus=pending —
-      // markFlushInProgress is called only when _doFlush actually starts, so
-      // a subsequent login while waiting for the scheduled flush does NOT trigger
-      // the crash-recovery auto-flush in init().
+      // Keep the flush pending until the coordinator actually starts it.
       await _meta.saveTempPath(_tempDbDir);
       if (wasInTemp) {
         FileLogService().log(
@@ -133,45 +132,28 @@ class RecoveryService {
     await _closeAllDbs();
     await app.setDbPath(_tempDbDir);
     await _openAllDbs();
-    // Seed TEMP's point_id from MAIN on first creation so flush can use a
-    // direct ATTACH copy without a JOIN remap.  Skip on resume (TEMP already
-    // has accumulated realtime data whose db_ids reference TEMP's point_id).
+    // New TEMP databases inherit MAIN point IDs; resumed ones keep their IDs.
     if (isNew) {
-      // Close app.db's handles first: _seedPointIdFromMain opens its own
-      // connection to these same TEMP files, and two live FFI connections
-      // writing one DB file is what crashes optime.db (locked / native abort,
-      // leaving a stale optime.db-journal). After seeding, reopen and re-init
-      // so app.db's in-memory point caches (optimeDb/meterDb/…) reflect the
-      // seeded point_id — otherwise the first realtime insert reuses db_id=1
-      // and hits the UNIQUE(id) collision on the un-try/caught point_id insert.
+      // Seed with app.db closed to avoid competing FFI writers.
+      // Reopen afterward so in-memory point caches use the seeded IDs.
       await _closeAllDbs();
       await _seedPointIdFromMain();
       await app.setDbPath(_tempDbDir);
       await _openAllDbs();
     }
-    // TEMP's meter table is empty right after staging, so initMeterDb leaves
-    // app.db.meterDb['value'] empty. The first realtime meter row is for a
-    // seeded point_id, so addRealtimeMeterData skips the new-point branch and
-    // evaluates `meterDb['value'][dbId] < 0` on a null entry → throws and
-    // crashes the realtime write (meter is the only DB with this last-value
-    // cache, which is why it's always meter). Pre-fill the cache from MAIN's
-    // last values so the comparison is safe and the first post-gap amount is
-    // computed against MAIN's real last value (see docs/issues-and-solutions.md
-    // Issue 3).
+    // TEMP starts without meter values even though point IDs are seeded.
+    // Seed MAIN values so the first realtime delta has a valid baseline.
     await _seedMeterValueCache();
   }
 
-  /// Pre-populates [app.db]'s in-memory meter last-value cache
-  /// (`meterDb['value']`, keyed by db_id string) from MAIN's most recent meter
-  /// rows. Only fills entries that are missing so it never clobbers a newer
-  /// value already accumulated in a resumed TEMP session.
+  /// Fills missing meter cache values from MAIN without replacing newer TEMP data.
   Future<void> _seedMeterValueCache() async {
     final reiriDb = app.db;
     if (reiriDb == null) return;
     final valueCache = reiriDb.meterDb['value'];
     if (valueCache is! Map) return;
 
-    final mainPath = '$_mainDbDir\\meter.db';
+    final mainPath = '$_mainDbDir\\${BackupDatabase.meter.fileName}';
     if (!await File(mainPath).exists()) return;
 
     final db = await databaseFactoryFfi.openDatabase(
@@ -193,9 +175,7 @@ class RecoveryService {
           filled++;
         }
       }
-      // Backfill any seeded point that has no MAIN value row yet with the
-      // "unknown" sentinel (-1) so addRealtimeMeterData never compares null,
-      // even when MAIN's meter table has no data for that point.
+      // Use -1 when a seeded point has no MAIN value.
       final pointList = reiriDb.meterDb['pointList'];
       if (pointList is Map) {
         for (final dbId in pointList.values) {
@@ -216,9 +196,11 @@ class RecoveryService {
   /// Copies MAIN's point_id table into each surrogate-key TEMP DB so that
   /// realtime writes and the subsequent flush share the same db_id mapping.
   Future<void> _seedPointIdFromMain() async {
-    for (final type in const ['meter', 'optime', 'ppd', 'trend']) {
-      final mainPath = '$_mainDbDir\\${_dbTypeToFile(type)}';
-      final tempPath = '$_tempDbDir\\${_dbTypeToFile(type)}';
+    for (final database in BackupDatabase.values.where(
+      (database) => database.usesPointId,
+    )) {
+      final mainPath = '$_mainDbDir\\${database.fileName}';
+      final tempPath = '$_tempDbDir\\${database.fileName}';
       if (!await File(mainPath).exists()) continue;
       final tempDb = await databaseFactoryFfi.openDatabase(
         tempPath,
@@ -233,10 +215,12 @@ class RecoveryService {
           );
         });
         await tempDb.execute('DETACH main_db');
-        FileLogService().log('[Recovery] Seeded point_id for $type from MAIN');
+        FileLogService().log(
+          '[Recovery] Seeded point_id for ${database.type} from MAIN',
+        );
       } catch (e) {
         FileLogService().log(
-          '[Recovery] _seedPointIdFromMain failed for $type: $e',
+          '[Recovery] _seedPointIdFromMain failed for ${database.type}: $e',
         );
       } finally {
         await tempDb.close();
@@ -244,11 +228,11 @@ class RecoveryService {
     }
   }
 
-  /// Closes all DB handles held by [app.db].  Call before flush so that
-  /// [_syncNewPointsInTemp] can write to TEMP without competing with the
-  /// realtime [app.db] writer. [finalizeFlushedCleanup] reopens everything on
-  /// MAIN when the flush is done.
-  Future<void> suspendRealtime() => _synchronized(_closeAllDbs);
+  /// Starts the coordinated flush and releases app.db handles until finalization.
+  Future<void> beginInterleavedFlush() => _synchronized(() async {
+    await _meta.markFlushInProgress(_tempDbDir);
+    await _closeAllDbs();
+  });
 
   /// Persists a healthy checkpoint without changing an active gap start.
   Future<void> recordHeartbeat({DateTime? at}) =>
@@ -263,110 +247,23 @@ class RecoveryService {
     );
   });
 
-  Future<void> _doFlush() async {
-    // Set inProgress before touching any files — this is the crash-recovery
-    // checkpoint that init() checks. If the app is killed after this line but
-    // before markFlushCompleted(), the next startup will resume the flush.
-    await _meta.markFlushInProgress(_tempDbDir);
-    try {
-      // Must operate on MAIN DB files while TEMP DB files hold the real-time data.
-      // Close app.db first so SQLite files are not locked.
-      await _closeAllDbs();
-
-      for (final dbFile in kInitialBackupDbFiles) {
-        final mainPath = '$_mainDbDir\\$dbFile';
-        final tempPath = '$_tempDbDir\\$dbFile';
-
-        if (!await File(tempPath).exists()) {
-          FileLogService().log(
-            '[Recovery] TEMP file not found, skipping: $dbFile',
-          );
-          continue;
-        }
-        if (!await File(mainPath).exists()) {
-          FileLogService().log(
-            '[Recovery] MAIN file not found, skipping: $dbFile',
-          );
-          continue;
-        }
-
-        final dbType = fileToDbType(dbFile);
-        if (dbType == null) {
-          FileLogService().log(
-            '[Recovery] No flush handler for $dbFile, skipping',
-          );
-          continue;
-        }
-
-        await _flushSingleDb(mainPath, tempPath, dbType);
-      }
-
-      await _meta.markFlushCompleted();
-      FileLogService().log('[Recovery] Flush complete — switching to MAIN DB');
-
-      await _switchToMainDbImpl();
-
-      // Delete TEMP folder after a successful switch.
-      final tempDir = Directory(_tempDbDir);
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-        FileLogService().log('[Recovery] TEMP DB deleted');
-      }
-    } catch (e) {
-      FileLogService().log('[Recovery] Flush failed: $e');
-      // Leave state as inProgress so next launch can retry.
-      rethrow;
-    }
-  }
-
-  /// Flushes TEMP DB rows for [dbType] into MAIN DB.
-  ///
-  /// `meter`/`trend`/`optime`/`ppd` store data rows keyed by a surrogate
-  /// `db_id` from their own `point_id` table. TEMP's `point_id` table is
-  /// built independently (starting at 1) while routing real-time writes
-  /// during a gap, so its `db_id` values do not match MAIN's mapping for the
-  /// same physical point. A raw row copy would therefore duplicate each
-  /// point's data under a different (wrong) id.
-  ///
-  /// To keep `point_id` consistent with MAIN, TEMP's rows are read back
-  /// together with TEMP's `point_id` to recover the original string id, then
-  /// replayed through `addXxxData` so MAIN resolves/assigns the correct
-  /// MAIN-side `db_id` (creating a new entry only if the point is genuinely
-  /// new to MAIN). TEMP's `point_id` table itself is never copied.
-  ///
-  /// `history.db` has no `point_id` surrogate key, so it uses a plain
-  /// `INSERT OR IGNORE ... SELECT *` via ATTACH.
-  Future<void> _flushSingleDb(
-    String mainPath,
-    String tempPath,
-    String dbType,
-  ) async {
-    await _flushSingleDbWindow(mainPath, tempPath, dbType, null, null);
-  }
-
-  /// Flushes TEMP rows for [dbType] where date >= [from] and date < [to]
-  /// (pass null for no bound) into MAIN DB.
-  ///
-  /// TEMP's point_id was seeded from MAIN at creation so db_ids already
-  /// match — a direct ATTACH copy is used instead of a JOIN remap.
-  /// [_syncNewPointsInTemp] handles the rare case where new controller
-  /// points appeared after TEMP was created (e.g. new equipment added
-  /// during a gap window) by inserting them into MAIN first and patching
-  /// TEMP's data rows if db_id assignments diverged.
+  /// Flushes TEMP rows in [from, to) into MAIN.
+  /// Point IDs are seeded from MAIN; new points are synced and patched first.
+  /// History has no surrogate point IDs and uses its normalized copy path.
   Future<void> _flushSingleDbWindow(
     String mainPath,
     String tempPath,
-    String dbType,
+    BackupDatabase database,
     DateTime? from,
     DateTime? to,
   ) async {
-    if (dbType == 'history') {
+    if (database.eventBased) {
       await _flushHistoryDb(mainPath, tempPath, from: from, to: to);
       return;
     }
 
     // Resolve any new points before the copy so db_ids are in sync.
-    await _syncNewPointsInTemp(mainPath, tempPath, dbType);
+    await _syncNewPointsInTemp(mainPath, tempPath, database.type);
 
     final db = await databaseFactoryFfi.openDatabase(
       mainPath,
@@ -405,12 +302,9 @@ class RecoveryService {
         }
       }
 
-      // Controller-downloaded Trend tables do not carry the UNIQUE(date, id)
-      // constraint used by tables created locally. Without an equivalent
-      // index, the NOT EXISTS check below scans the full MAIN table once for
-      // every TEMP row. Add a non-unique index so existing duplicates remain
-      // valid while recovery lookups become indexed.
-      if (dbType == 'trend') {
+      // Downloaded trend tables lack the local unique index.
+      // Add a non-unique index to accelerate recovery without rejecting old rows.
+      if (database == BackupDatabase.trend) {
         final timer = Stopwatch()..start();
         for (final row in tables) {
           final tableName = row['name'] as String;
@@ -430,15 +324,8 @@ class RecoveryService {
       await db.transaction((txn) async {
         for (final row in tables) {
           final tableName = row['name'] as String;
-          // Gap-fill runs before this flush and stores amounts taken directly
-          // from the controller (correct per-interval deltas). TEMP real-time
-          // amounts can be inflated when the first post-reconnect push spans
-          // multiple intervals (meterDb cache was seeded from a pre-gap
-          // baseline). Use NOT EXISTS so TEMP rows are skipped for any (date,
-          // id) already written by gap-fill; only genuinely new real-time rows
-          // (timestamps beyond the gap window) are inserted.
-          // Note: these tables have no UNIQUE(date,id) constraint, so the
-          // standard INSERT OR IGNORE cannot deduplicate without this check.
+          // Controller gap-fill values take precedence over overlapping TEMP deltas.
+          // These tables need NOT EXISTS because they lack UNIQUE(date, id).
           final conditions = <String>[
             if (from != null) 't.date >= ${_toDbInt(from)}',
             if (to != null) 't.date < ${_toDbInt(to)}',
@@ -458,18 +345,15 @@ class RecoveryService {
 
       await db.execute('DETACH temp_db');
       FileLogService().log(
-        '[Recovery] Flushed "$dbType" [${from ?? "start"}, ${to ?? "end"}] (direct copy)',
+        '[Recovery] Flushed "${database.type}" '
+        '[${from ?? "start"}, ${to ?? "end"}] (direct copy)',
       );
     } finally {
       await db.close();
     }
   }
 
-  /// Syncs new point_id entries from TEMP into MAIN, then patches TEMP's data
-  /// rows if MAIN assigned different db_ids (can happen when gap-fill and
-  /// realtime both encounter a brand-new controller point and assign it in a
-  /// different order).  A no-op when all TEMP points already exist in MAIN
-  /// (the common case after seeding at TEMP creation).
+  /// Syncs new points into MAIN and patches TEMP rows when IDs differ.
   Future<void> _syncNewPointsInTemp(
     String mainPath,
     String tempPath,
@@ -569,30 +453,25 @@ class RecoveryService {
     }
   }
 
-  /// Flushes the TEMP DB window [from, to) for [dbType] into MAIN.
-  /// Called by the interleaved flush in RecoveryNotifier.runFlushNow after
-  /// each gap-fill period so rows land in MAIN in chronological order.
-  /// Pass [to]=null to flush from [from] to the end of TEMP (last window).
+  /// Flushes one TEMP window after its gap-fill; null [to] means through the end.
   Future<void> flushTempWindowToMain(
-    String dbType,
+    BackupDatabase database,
     DateTime? from,
     DateTime? to,
   ) => _synchronized(() async {
-    final dbFile = _dbTypeToFile(dbType);
+    final dbFile = database.fileName;
     final mainPath = '$_mainDbDir\\$dbFile';
     final tempPath = '$_tempDbDir\\$dbFile';
     if (!await File(tempPath).exists() || !await File(mainPath).exists())
       return;
-    await _flushSingleDbWindow(mainPath, tempPath, dbType, from, to);
+    await _flushSingleDbWindow(mainPath, tempPath, database, from, to);
   });
 
-  /// Reopens [app.db] on whichever directory is currently the active target
-  /// (TEMP if the gap is still unresolved, otherwise MAIN). Call this if a
-  /// flush attempt throws after [suspendRealtime] closed all handles but
-  /// before [finalizeFlushedCleanup] could reopen them — otherwise real-time
-  /// writes have nowhere to land and backup silently stops until the app is
-  /// restarted (or forever, if metadata never records the flush as stuck).
+  /// Reopens app.db on TEMP or MAIN after a failed flush closed its handles.
   Future<void> reopenAfterFailedFlush() => _synchronized(() async {
+    if (hasActiveGap) {
+      await _meta.markFlushPending(_tempDbDir);
+    }
     await app.setDbPath(hasActiveGap ? _tempDbDir : _mainDbDir);
     await _openAllDbs();
     FileLogService().log(
@@ -600,30 +479,61 @@ class RecoveryService {
     );
   });
 
-  /// Marks flush completed, switches to MAIN DB, and deletes the TEMP folder.
-  /// Called after all interleaved gap-fill + TEMP-window writes are done.
-  Future<void> finalizeFlushedCleanup() => _synchronized(() async {
-    await _meta.markFlushCompleted();
-    FileLogService().log('[Recovery] Flush complete — switching to MAIN DB');
+  /// Reopens MAIN before catch-up so new realtime packets have a live target.
+  /// Metadata remains in-progress until catch-up and cleanup both finish.
+  Future<void> switchToMainForCatchUp() => _synchronized(() async {
+    FileLogService().log('[Recovery] Gap merge complete — switching to MAIN');
     await _switchToMainDbImpl();
-    final tempDir = Directory(_tempDbDir);
-    if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
-      FileLogService().log('[Recovery] TEMP DB deleted');
+  });
+
+  /// Completes metadata after catch-up and removes the now-inactive TEMP DB.
+  /// A third-party SQLite viewer may temporarily lock TEMP on Windows; cleanup
+  /// is retried and then deferred without invalidating an otherwise-good merge.
+  Future<void> finalizeFlushedCleanup() => _synchronized(() async {
+    final deleted = await _deleteTempDbWithRetry();
+    await _meta.markFlushCompleted();
+    FileLogService().log('[Recovery] Flush complete — MAIN is active');
+    if (!deleted) {
+      FileLogService().log(
+        '[Recovery] TEMP cleanup deferred; the inactive folder is still locked',
+      );
     }
   });
 
-  /// Flushes TEMP history rows into MAIN, normalising each row before
-  /// inserting:
-  ///   • com / id / who: null or the string "null" → ''
-  ///   • data: Dart Map.toString() format → proper JSON
-  ///
-  /// Deduplicates on (date, type, com, id) via NOT EXISTS — ignoring the
-  /// `data` column — so that a gap-fill row (data='{}') and a real-time TEMP
-  /// row (data='') for the same event do not both land in MAIN.  SQLite's
-  /// UNIQUE constraint (used by INSERT OR IGNORE) includes `data`, so it
-  /// would let both variants through.  COALESCE in the NOT EXISTS clause also
-  /// matches against any pre-existing NULL-com rows in MAIN.
+  Future<bool> _deleteTempDbWithRetry() async {
+    final tempDir = Directory(_tempDbDir);
+    if (!await tempDir.exists()) return true;
+
+    Object? lastError;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await tempDir.delete(recursive: true);
+        FileLogService().log('[Recovery] TEMP DB deleted');
+        return true;
+      } catch (error) {
+        lastError = error;
+        FileLogService().log(
+          '[Recovery] TEMP delete attempt $attempt/3 failed: $error',
+        );
+        if (attempt < 3) {
+          await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+        }
+      }
+    }
+    FileLogService().log('[Recovery] TEMP DB remains on disk: $lastError');
+    return false;
+  }
+
+  /// Opens and initialises the current real-time write target. Interrupted or
+  /// pending recovery sessions stay on TEMP; healthy sessions use MAIN.
+  Future<void> openActiveRealtimeDb() => _synchronized(() async {
+    await app.setDbPath(hasActiveGap ? _tempDbDir : _mainDbDir);
+    await _openAllDbs();
+    if (hasActiveGap) await _seedMeterValueCache();
+  });
+
+  /// Normalizes TEMP history fields and JSON before copying them to MAIN.
+  /// Deduplication ignores `data` so formatting variants do not duplicate events.
   Future<void> _flushHistoryDb(
     String mainPath,
     String tempPath, {
@@ -742,25 +652,22 @@ class RecoveryService {
     FileLogService().log('[Recovery] Switched to MAIN DB at $_mainDbDir');
   }
 
-  /// Writes [records] (from a `*_db_backup` controller response) into the
-  /// MAIN DB for [dbType].  Opens a dedicated SQLite connection by absolute
-  /// path so it does not interfere with [app.db], which points to TEMP during
-  /// gap recovery.
+  /// Writes controller [records] to MAIN without disturbing app.db on TEMP.
   Future<void> fillGapInMainDb(
-    String dbType,
+    BackupDatabase database,
     List<dynamic> records, {
     DateTime? deleteFrom,
   }) => _synchronized(
-    () => _fillGapInMainDbImpl(dbType, records, deleteFrom: deleteFrom),
+    () => _fillGapInMainDbImpl(database, records, deleteFrom: deleteFrom),
   );
 
   Future<void> _fillGapInMainDbImpl(
-    String dbType,
+    BackupDatabase database,
     List<dynamic> records, {
     DateTime? deleteFrom,
   }) async {
     if (records.isEmpty) return;
-    final dbFile = _dbTypeToFile(dbType);
+    final dbFile = database.fileName;
     final mainPath = '$_mainDbDir\\$dbFile';
     if (!await File(mainPath).exists()) {
       FileLogService().log(
@@ -775,12 +682,12 @@ class RecoveryService {
       options: OpenDatabaseOptions(readOnly: false, singleInstance: false),
     );
     final mainDb = ReiriDb();
-    mainDb.db[dbType] = rawDb;
+    mainDb.db[database.type] = rawDb;
     try {
       // Sort AFTER init so the loaded point_id mapping can be used to order
       // records by integer db_id (matching the original DB's insertion order).
-      switch (dbType) {
-        case 'trend':
+      switch (database) {
+        case BackupDatabase.trend:
           await mainDb.initTrendDb();
           final pointList = mainDb.trendDb['pointList'] as Map;
           final sorted = List<dynamic>.from(records)
@@ -797,28 +704,28 @@ class RecoveryService {
               return a[1].toString().compareTo(b[1].toString());
             });
           await mainDb.addTrendData(sorted);
-        case 'meter':
+        case BackupDatabase.meter:
           await mainDb.initMeterDb();
           final sorted = _sortByDbId(
             records,
             mainDb.meterDb['pointList'] as Map<String, int>,
           );
           await mainDb.addMeterData(sorted);
-        case 'optime':
+        case BackupDatabase.optime:
           await mainDb.initOptimeDb();
           final sorted = _sortByDbId(
             records,
             mainDb.optimeDb['pointList'] as Map<String, int>,
           );
           await mainDb.addOptimeData(sorted);
-        case 'ppd':
+        case BackupDatabase.ppd:
           await mainDb.initPpdDb();
           final sorted = _sortByDbId(
             records,
             mainDb.ppdDb['pointList'] as Map<String, int>,
           );
           await mainDb.addPpdData(sorted);
-        case 'history':
+        case BackupDatabase.history:
           await mainDb.initHistoryDb();
           if (deleteFrom != null) {
             final fromInt = _dateTimeToDbInt(deleteFrom);
@@ -856,19 +763,15 @@ class RecoveryService {
       );
     } catch (e) {
       FileLogService().log('[Recovery] Gap-fill: write error for $dbFile: $e');
-      // A failed write must abort the flush. Swallowing this error allows
-      // finalizeFlushedCleanup() to clear the gap and delete TEMP even though
-      // the recovered controller records never reached MAIN.
+      // Abort so a failed write cannot clear its gap or delete TEMP.
       rethrow;
     } finally {
       await rawDb.close();
-      mainDb.db.remove(dbType);
+      mainDb.db.remove(database.type);
     }
   }
 
-  /// Sorts gap-fill records `[date, string_id, ...]` by date then by integer
-  /// db_id from [pointList]. Records for new points (not yet in point_id) sort
-  /// after known points; ties within new points break by string_id.
+  /// Sorts gap records by date, known point ID, then new string ID.
   static List<dynamic> _sortByDbId(
     List<dynamic> records,
     Map<String, int> pointList,
@@ -885,25 +788,6 @@ class RecoveryService {
     });
   }
 
-  /// Maps a DB filename (e.g. `'trend.db'`) to its short type key.
-  static String? fileToDbType(String file) => switch (file) {
-    'trend.db' => 'trend',
-    'meter.db' => 'meter',
-    'optime.db' => 'optime',
-    'ppd.db' => 'ppd',
-    'history.db' => 'history',
-    _ => null,
-  };
-
-  static String _dbTypeToFile(String type) => switch (type) {
-    'trend' => 'trend.db',
-    'meter' => 'meter.db',
-    'optime' => 'optime.db',
-    'ppd' => 'ppd.db',
-    'history' => 'history.db',
-    _ => throw ArgumentError('Unknown DB type: $type'),
-  };
-
   /// Computes the next scheduled flush time for the given [hour] and [minute].
   /// Returns today's time if it hasn't passed yet, otherwise tomorrow's.
   static DateTime nextOffPeakTime({int hour = 3, int minute = 0}) {
@@ -914,20 +798,14 @@ class RecoveryService {
         : todayAt.add(const Duration(days: 1));
   }
 
-  /// Re-opens and re-initialises all MAIN DB files so in-memory caches
-  /// (e.g. trendDb, meterDb) reflect any rows that were written directly to
-  /// the DB files by catch-up or gap-fill after the last [_openAllDbs] call.
-  /// Call this after [finalizeFlushedCleanup] + catch-up writes are done so
-  /// subsequent realtime [app.db] writes see the correct post-flush state.
+  /// Reopens MAIN so app.db caches include direct recovery writes.
   Future<void> reinitMainDb() => _synchronized(_openAllDbs);
 
-  /// Removes duplicate rows from every data table in the MAIN [dbFile], keeping
-  /// only the earliest rowid for each (date, id) pair.  Duplicates can appear
-  /// when overlapping gap-fill windows both request the same boundary record
-  /// (e.g. multi-period meter/optime where period-1's extended `to` and
-  /// period-2's `_prevBoundary` both land on the same 15-min stamp), or when a
-  /// catch-up write and a TEMP-flush write land the same boundary record.
-  Future<void> deduplicateInMain(String dbFile) => _synchronized(() async {
+  /// Keeps the earliest MAIN row for each duplicated `(date, id)` pair.
+  Future<void> deduplicateInMain(
+    BackupDatabase database,
+  ) => _synchronized(() async {
+    final dbFile = database.fileName;
     final mainPath = '$_mainDbDir\\$dbFile';
     if (!await File(mainPath).exists()) return;
     final db = await databaseFactoryFfi.openDatabase(
@@ -976,24 +854,15 @@ class RecoveryService {
     }
   });
 
-  /// Refreshes [app.db]'s in-memory meter last-value cache from MAIN after
-  /// catch-up writes, WITHOUT closing any live DB handles.
-  ///
-  /// Unlike [reinitMainDb], this opens a separate read-only connection to
-  /// MAIN meter.db, overwrites all cache entries with the latest values from
-  /// disk, then closes that read-only connection — leaving [app.db]'s own
-  /// handle open so concurrent real-time writes are never interrupted.
-  ///
-  /// Called instead of [reinitMainDb] after the flush cycle to avoid the
-  /// brief handle-close window that silently dropped real-time history records
-  /// arriving at the reconnect minute (e.g. dss4 connect burst events).
+  /// Refreshes meter baselines through a separate read-only MAIN connection.
+  /// Live app.db handles remain open for concurrent realtime writes.
   Future<void> refreshMeterValueCacheFromMain() => _synchronized(() async {
     final reiriDb = app.db;
     if (reiriDb == null) return;
     final valueCache = reiriDb.meterDb['value'];
     if (valueCache is! Map) return;
 
-    final mainPath = '$_mainDbDir\\meter.db';
+    final mainPath = '$_mainDbDir\\${BackupDatabase.meter.fileName}';
     if (!await File(mainPath).exists()) return;
 
     final db = await databaseFactoryFfi.openDatabase(
@@ -1039,17 +908,8 @@ class RecoveryService {
     return s == 'null' ? '' : s;
   }
 
-  /// Ensures the history `data` payload is stored as valid JSON or empty
-  /// string, matching the source DB format.
-  ///
-  /// The controller returns `data` as Dart Map.toString() notation
-  /// (e.g. `{comm_stat: false}`) rather than proper JSON.  Keys are
-  /// unquoted; string values are unquoted; booleans/numbers are correct.
-  /// This converts to `{"comm_stat":false}` so the DB matches the
-  /// format written by the initial FTP/local-import backup.
-  ///
-  /// Null or empty data (e.g. login/logout events) is stored as '' to
-  /// match the source DB, not '{}' which would create spurious differences.
+  /// Converts controller map notation to source-compatible JSON.
+  /// Null and empty event data remain empty strings.
   static String _normalizeHistoryData(dynamic v) {
     if (v == null) return '';
     if (v is! String) return jsonEncode(v);
@@ -1062,9 +922,7 @@ class RecoveryService {
     return _dartMapToJson(s);
   }
 
-  /// Converts a Dart Map.toString() string like `{key: val, key: val}` to
-  /// JSON `{"key":"val","key":"val"}`.  Handles nested `{}` objects.
-  /// Null values → `""`, booleans/numbers → unquoted, strings → quoted.
+  /// Converts nested Dart map notation to valid JSON.
   static String _dartMapToJson(String s) {
     s = s.trim();
     if (!s.startsWith('{') || !s.endsWith('}')) return '"$s"';

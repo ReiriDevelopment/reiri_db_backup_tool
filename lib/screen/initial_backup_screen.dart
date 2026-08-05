@@ -13,6 +13,7 @@ import 'home_screen.dart';
 import 'login_screen.dart';
 import 'reiri_screen.dart';
 
+/// Guides the user through the required first backup by FTP or local import.
 class InitialBackupScreen extends ReiriScreen {
   InitialBackupScreen({this.initialMac});
 
@@ -55,8 +56,9 @@ class InitialBackupScreen extends ReiriScreen {
 
     final macaddr =
         initialMac ?? app.selectedController?['macaddr']?.toString();
-    final safeMac =
-        (macaddr == null || macaddr.isEmpty) ? '' : macToSafeFolderName(macaddr);
+    final safeMac = (macaddr == null || macaddr.isEmpty)
+        ? ''
+        : macToSafeFolderName(macaddr);
     final controllerIp = app.controllerInfo('ipaddr')?.toString() ?? '';
 
     return Scaffold(
@@ -97,9 +99,8 @@ class InitialBackupScreen extends ReiriScreen {
               _buildMethodCard(
                 methodValue: 'ftp',
                 icon: Icons.cloud_download_outlined,
-                title: 'Load via FTP',
-                description:
-                    'Download the historical DB from the controller over FTP.',
+                title: app.word('load_via_ftp'),
+                description: app.word('load_via_ftp_description'),
                 onTap: () {
                   selectedMethod = 'ftp';
                   app.requestRefresh('initial_backup_screen');
@@ -108,9 +109,8 @@ class InitialBackupScreen extends ReiriScreen {
               _buildMethodCard(
                 methodValue: 'local',
                 icon: Icons.sd_storage_outlined,
-                title: 'Import Local DB Files',
-                description:
-                    'Select existing local SQLite DB files and import them.',
+                title: app.word('import_local_db_files'),
+                description: app.word('import_local_db_description'),
                 onTap: () {
                   selectedMethod = 'local';
                   app.requestRefresh('initial_backup_screen');
@@ -126,12 +126,14 @@ class InitialBackupScreen extends ReiriScreen {
                     app.requestRefresh('initial_backup_screen');
                   },
                   icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text('Continue'),
+                  label: Text(app.word('continue')),
                   style: FilledButton.styleFrom(
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     textStyle: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               const SizedBox(height: 12),
@@ -144,10 +146,15 @@ class InitialBackupScreen extends ReiriScreen {
                     (route) => false,
                   );
                 },
-                icon: Icon(Icons.logout_rounded,
-                    size: 16, color: app.color.inactive),
-                label: Text('Logout',
-                    style: TextStyle(color: app.color.inactive)),
+                icon: Icon(
+                  Icons.logout_rounded,
+                  size: 16,
+                  color: app.color.inactive,
+                ),
+                label: Text(
+                  app.word('logout'),
+                  style: TextStyle(color: app.color.inactive),
+                ),
               ),
             ],
           ),
@@ -171,14 +178,8 @@ class InitialBackupScreen extends ReiriScreen {
         await markInitialBackupDone(macaddr!, method);
         await storeBackupRootPath(macaddr, backupPath);
       } catch (_) {}
-      // Stamp the FTP/import completion time as "disconnected at" so that gap
-      // detection in HomeScreen._init() can catch any controller writes that
-      // occur between the snapshot and real-time backup starting.
-      //
-      // When the import view detected per-file missing data (interval
-      // boundaries crossed since the imported snapshot's latest record), seed
-      // those ranges into backup_metadata.detectedGaps so RecoveryService
-      // routes real-time → TEMP DB on first connect and schedules gap-fill.
+      // Treat setup completion as a disconnect boundary.
+      // Seed known gaps so first-connect writes route through TEMP.
       try {
         final safeMac = macToSafeFolderName(macaddr!);
         final macDir = '$backupPath\\$safeMac';
@@ -192,31 +193,23 @@ class InitialBackupScreen extends ReiriScreen {
         }
         final ftpCompletedAt = DateTime.now();
         if (initialGaps.isNotEmpty) {
-          // Seed both detectedGaps AND gapPeriods so the Recovery tab shows
-          // the rows immediately (the dot comes from detectedGaps; the table
-          // rows come from gapPeriods — seeding only one causes dot-with-empty-
-          // table). Also set tConnect so _computeGaps can detect additional
-          // boundaries that cross between FTP completion and the first WebSocket
-          // connect.
-          await metaService.save(BackupMetadata(
-            tConnect: ftpCompletedAt,
-            detectedGaps: initialGaps,
-            gapPeriods: initialGaps,
-            backupState: BackupState.realtimeTemp,
-            flushStatus: FlushStatus.pending,
-            autoFill: true,
-          ));
+          // Seed operational and display gaps together.
+          // tConnect also covers boundaries crossed before first connection.
+          await metaService.save(
+            BackupMetadata(
+              tConnect: ftpCompletedAt,
+              detectedGaps: initialGaps,
+              gapPeriods: initialGaps,
+              backupState: BackupState.realtimeTemp,
+              flushStatus: FlushStatus.pending,
+              autoFill: true,
+            ),
+          );
         } else {
-          // No initial gaps detected — stamp disconnectedAt so _computeGaps
-          // in onConnected() can catch any boundary that is written between
-          // FTP completion and the first WebSocket connect.  Without this, a
-          // record written at exactly the FTP completion timestamp is missed
-          // when real-time backup starts just after the controller writes it
-          // (e.g. FTP completes at 17:39:50, controller writes 17:35-stamped
-          // trend record at 17:40:00, real-time starts at 17:40:05).
-          await metaService.save(BackupMetadata(
-            disconnectedAt: ftpCompletedAt,
-          ));
+          // Preserve the setup-to-connect window even when no gap is known yet.
+          await metaService.save(
+            BackupMetadata(disconnectedAt: ftpCompletedAt),
+          );
         }
       } catch (_) {}
       await BackupLogNotifier.clearEntries(macaddr!);
@@ -245,7 +238,7 @@ class InitialBackupScreen extends ReiriScreen {
                   app.requestRefresh('initial_backup_screen');
                 },
                 icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                label: const Text('Back'),
+                label: Text(app.word('back')),
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.zero,
                   foregroundColor: app.color.inactive,
@@ -253,7 +246,11 @@ class InitialBackupScreen extends ReiriScreen {
                 ),
               ),
               const SizedBox(height: 16),
-              _buildViewHeader(context, isFtp: isFtp, controllerIp: controllerIp),
+              _buildViewHeader(
+                context,
+                isFtp: isFtp,
+                controllerIp: controllerIp,
+              ),
               const SizedBox(height: 24),
               if (isFtp)
                 InitialBackupFtpView(
@@ -298,15 +295,15 @@ class InitialBackupScreen extends ReiriScreen {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isFtp ? 'Load via FTP' : 'Import Local DB Files',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                app.word(isFtp ? 'load_via_ftp' : 'import_local_db_files'),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               Text(
                 isFtp
-                    ? 'Download DB files from the controller at $controllerIp'
-                    : 'Select the controller\'s "DB" folder containing the SQLite DB files to import.',
+                    ? '${app.word('ftp_download_from_controller')} $controllerIp'
+                    : app.word('local_db_folder_instruction'),
                 style: TextStyle(fontSize: 12, color: app.color.inactive),
               ),
             ],
@@ -328,23 +325,26 @@ class InitialBackupScreen extends ReiriScreen {
                 color: app.color.active.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.backup_rounded,
-                  size: 28, color: app.color.active),
+              child: Icon(
+                Icons.backup_rounded,
+                size: 28,
+                color: app.color.active,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
-                'Initial Backup',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                app.word('initial_backup'),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ],
         ),
         const SizedBox(height: 10),
         Text(
-          'Choose how to import the controller database before enabling continuous backup.',
+          app.word('initial_backup_intro'),
           style: TextStyle(fontSize: 13, color: app.color.inactive),
         ),
         if (macaddr != null && macaddr.isNotEmpty) ...[
@@ -436,8 +436,7 @@ class InitialBackupScreen extends ReiriScreen {
                   const SizedBox(height: 3),
                   Text(
                     description,
-                    style:
-                        TextStyle(fontSize: 12, color: app.color.inactive),
+                    style: TextStyle(fontSize: 12, color: app.color.inactive),
                   ),
                 ],
               ),
@@ -454,7 +453,7 @@ class InitialBackupScreen extends ReiriScreen {
         Icon(Icons.error_outline_rounded, size: 40, color: app.color.alert),
         const SizedBox(height: 10),
         Text(
-          'Controller ID is missing. Please log in again.',
+          app.word('controller_id_missing'),
           style: TextStyle(color: app.color.alert, fontSize: 13),
           textAlign: TextAlign.center,
         ),

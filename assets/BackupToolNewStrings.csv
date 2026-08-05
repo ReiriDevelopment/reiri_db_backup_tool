@@ -1,0 +1,132 @@
+﻿key-WORD,Note,EN
+fallback_controller_name,Dashboard fallback when the controller has no name,Reiri Controller
+version_prefix,Prefix placed before the version number,Ver.
+keep_backup_running,Close confirmation dialog title,Keep Backup Running?
+close_app_warning,Close confirmation dialog message,Closing this app will stop all background backup. It is recommended to keep the app running.
+minimize_to_tray,Close confirmation dialog action,Minimize to Tray
+close_anyway,Close confirmation dialog destructive action,Close Anyway
+tray_warning_no_recent_backup,System tray warning appended after the tray app name,Warning: no recent backup
+open_app,System tray menu action,Open app
+exit,System tray menu action,Exit
+light_mode,Sidebar theme action,Light Mode
+dark_mode,Sidebar and Settings theme label,Dark Mode
+loading,Terms and Conditions document loading state,Loading
+load_error,Terms and Conditions document error state,Load Error
+no_camera_permission,QR scanner permission error,No camera permission
+dashboard,Sidebar and page title,Dashboard
+recovery,"Sidebar, page title, and backup-log type",Recovery
+backup_log,Sidebar and page title,Backup Log
+settings,Sidebar and page title,Settings
+move_backup_data,Backup-path change dialog title,Move Backup Data?
+move_backup_data_message,Backup-path change dialog; show the old path separately,Existing backup data was found. Move it to the new location so backup can continue from where it left off?
+start_fresh,Backup-path change dialog action,"No, start fresh"
+move_data,Backup-path change dialog action,Move Data
+logout_backup_warning,Logout confirmation dialog message,Backup will stop after logout. Are you sure you want to log out?
+initial_backup,Initial-backup page title,Initial Backup
+initial_backup_intro,Initial-backup page introduction,Choose how to import the controller database before enabling continuous backup.
+load_via_ftp,Initial-backup method and view title,Load via FTP
+load_via_ftp_description,Initial-backup method description,Download the historical DB from the controller over FTP.
+import_local_db_files,Initial-backup method and view title,Import Local DB Files
+import_local_db_description,Initial-backup method description,Select existing local SQLite DB files and import them.
+continue,Initial-backup selection action,Continue
+back,Initial-backup navigation action,Back
+ftp_download_from_controller,FTP view subtitle prefix; append the controller IP,Download DB files from the controller at
+local_db_folder_instruction,Local-import view subtitle; DB is a folder name,"Select the controller's ""DB"" folder containing the SQLite DB files to import."
+controller_id_missing,Initial-backup blocking error,Controller ID is missing. Please log in again.
+controller_ip_unavailable,FTP error shown in a snack bar,Controller IP is not available.
+ftp_download_failed,FTP error prefix; append the error details,FTP download failed
+ftp_connect_failed,FTP connection failure detail,FTP connect failed
+backup_path_not_selected,FTP destination state,Backup path not selected
+select_path,FTP destination action,Select Path
+change,Change selected FTP destination,Change
+start_ftp_download,FTP download action,Start FTP Download
+select_source_folder,Local-import source action,Select Source Folder
+source_path,Selected import source label; append the path,Source
+select_backup_path,Local-import destination action,Select Backup Path
+backup_root_label,Local-import destination label; append the path,Backup root
+controller_folder_label,Local-import destination label; append the controller folder,Controller folder
+scanning_db_files,Local-import scan progress,Scanning DB files
+scan_result,Local-import scan result heading,Scan Result
+missing,Local-import file status,Missing
+import,Local-import action,Import
+importing_progress,Local-import progress label; show the percentage separately,Importing
+import_failed,Local-import error prefix; append the error details,Import failed
+dashboard_subtitle,Dashboard subtitle,Overview of backup status and connected databases
+backup_directory_not_configured,Dashboard warning,Backup directory not configured. DB stats cannot be loaded.
+go_to_settings,Dashboard warning action,Go to Settings
+mac_address,Controller card label; append the MAC address,MAC
+refreshed,Manual refresh cooldown state,Refreshed
+connected,Controller card and system tray connection state,Connected
+disconnected,Controller card and system tray connection state,Disconnected
+database_status,Dashboard database card title,Database Status
+table_database,Database/recovery/log table and CSV export heading,DATABASE
+table_description,Dashboard table column heading,DESCRIPTION
+table_last_backup,Dashboard table column heading,LAST BACKUP
+table_status,Dashboard table column heading,STATUS
+db_desc_history_event,Dashboard database description and recovery progress name,History event
+db_desc_meter_data,Dashboard database description and recovery progress name,Meter data
+db_desc_trend_data,Dashboard database description and recovery progress name,Trend data
+db_desc_ppd_data,Dashboard database description and recovery progress name; keep PPD unchanged,PPD data
+not_found,Dashboard database status,Not found
+delayed,Dashboard database status,Delayed
+not_synced,Dashboard database status,Not synced
+scheduled_to_sync,Dashboard database status,Scheduled to sync
+synced,Dashboard database status,Synced
+realtime_backup,Dashboard card title,Real-time Backup
+no_events_yet,Real-time backup empty state,No events yet
+duration_seconds,Compact second unit appended directly after the number,s
+duration_hours,Compact recovery hour unit appended directly after the number,h
+duration_minutes,Compact recovery minute unit appended directly after the number,m
+duration_days_short,Compact day unit appended directly after the number,d
+ago,Relative-time word placed after the number and compact unit,ago
+active,Real-time backup state,Active
+waiting_for_connection,Real-time backup state,Waiting for connection
+appending_new_records,Real-time backup activity,Appending new records
+last_event,Real-time backup label; append the relative time,Last event
+recovery_subtitle,Recovery page subtitle,Detect and recover missing record periods from the controller
+scanning,Recovery scan action in progress,Scanning
+scan_for_gaps,Recovery scan action,Scan for Gaps
+table_missing_record_period,Recovery table column heading,MISSING RECORD PERIOD
+tonight,Recovery schedule relative date,Tonight
+recovering_missing_data,Recovery progress heading,Recovering missing data
+no_missing_data_detected,Recovery empty-state heading,No missing data detected
+no_gaps_found,Recovery empty-state heading,No gaps found
+all_databases_up_to_date,Recovery healthy-state message,All databases are up to date. Real-time backup is active.
+scan_for_gaps_instruction,Recovery empty-state instruction,"Press ""Scan for Gaps"" to check for missing records."
+preparing_recovery,Recovery progress step,Preparing recovery
+fetching_from_controller,Recovery progress step; show the database name separately,Fetching from controller
+gap_progress,Recovery progress label shown before current and total numbers,gap
+writing_to_database,Recovery progress step; show the database name separately,Writing to database
+finalising,Recovery progress step,Finalising
+backup_log_subtitle,Backup Log page subtitle,Full history of all backup and recovery events
+filter_type,Backup Log filter and CSV export heading,TYPE
+all,Backup Log filter option,All
+realtime,Backup Log type,Real-time
+filter_result,Backup Log filter and CSV export heading,RESULT
+success,Backup Log result,Success
+fail,Backup Log result,Fail
+export_json,Backup Log export action,Export JSON
+export_csv,Backup Log export action,Export CSV
+log_backed_up_at,Backup Log table and CSV export heading,BACKED UP AT
+log_record_time,Backup Log table and CSV export heading,RECORD TIME
+no_log_entries,Backup Log empty state,No log entries yet
+load_more,Backup Log pagination action,Load More
+settings_subtitle,Settings page subtitle,Configure backup preferences and connection
+backup_storage_path,Settings item title,Backup Storage Path
+not_configured_browse,Settings backup-path empty state,Not configured. Tap Browse to set.
+browse,Settings backup-path action,Browse
+set_backup_folder_hint,Settings backup-path warning,Set your backup folder to enable dashboard DB stats.
+display_language_description,Settings language description,Display language for all UI text
+dark_mode_description,Settings theme description,Switch between light and dark appearance
+launch_on_windows_startup,Settings item title,Launch on Windows Startup
+launch_startup_description,Settings startup description,Start the app automatically when Windows boots
+auto_login_on_startup,Settings item title,Auto-login on Startup
+auto_login_description,Settings auto-login description,Connect to last-used controller automatically
+recovery_mode,Settings item title,Recovery Mode
+recovery_mode_description,Settings recovery-mode description,"Fill missing data immediately on reconnect, or at a scheduled time"
+immediate,Settings recovery-mode option,Immediate
+scheduled,Settings recovery-mode option and Recovery table heading,Scheduled
+recovery_schedule_time,Settings item title and time-picker heading,Recovery Schedule Time
+immediate_mode_active,Settings recovery-schedule disabled state,Not used - immediate mode is active
+recovery_schedule_description,Settings recovery-schedule description,Daily time to merge gap recovery data into backup
+select_backup_folder,Native folder-picker confirmation action,Select Backup Folder

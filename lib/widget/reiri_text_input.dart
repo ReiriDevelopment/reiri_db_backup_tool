@@ -36,6 +36,7 @@ class ReiriTextInput extends StatefulWidget {
   State<ReiriTextInput> createState() => _ReiriTextInputState();
 }
 
+/// Manages focus, validation, and visibility for a Reiri text field.
 class _ReiriTextInputState extends State<ReiriTextInput> {
   late final TextEditingController _controller;
   bool _showPassword = false;
