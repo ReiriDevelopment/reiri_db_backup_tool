@@ -168,7 +168,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
 
       await _loadDbStats();
-      await _maybeAutoFlush();
+      // Do not hold the periodic tick open for the whole recovery. Later ticks
+      // must keep advancing [_lastRefreshTick], otherwise a long flush looks
+      // like a Windows sleep gap after recovery completes.
+      unawaited(_maybeAutoFlush());
     } finally {
       _refreshTickRunning = false;
     }
