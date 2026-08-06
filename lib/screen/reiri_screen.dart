@@ -1,3 +1,5 @@
+// File purpose: Provides shared screen layout, app bars, and status indicators.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:std_widget/reiri_icons.dart';
@@ -5,7 +7,7 @@ import 'package:reiri_app_core/reiri_app_core.dart';
 
 /// Provides the shared scaffold and layout helpers used by setup screens.
 class ReiriScreen extends ConsumerWidget {
-  ReiriScreen();
+  ReiriScreen({super.key});
   EdgeInsetsGeometry bottomMargin = EdgeInsets.fromLTRB(0, 0, 0, 10);
   EdgeInsetsGeometry scrollAreaMargin = EdgeInsets.fromLTRB(10, 10, 10, 0);
   EdgeInsetsGeometry nonScrollAreaMargin = EdgeInsets.all(10);
@@ -97,10 +99,11 @@ class ReiriScreen extends ConsumerWidget {
               return IconButton(
                 icon: Icon(Icons.menu_rounded),
                 onPressed: () {
-                  if (controller.isOpen)
+                  if (controller.isOpen) {
                     controller.close();
-                  else
+                  } else {
                     controller.open();
+                  }
                 },
               );
             },
@@ -117,7 +120,7 @@ class ReiriScreen extends ConsumerWidget {
   }
 
   AppBar appBarSub(BuildContext context, {String? title}) {
-    if (title == null) title = '';
+    title ??= '';
     return AppBar(
       leading: IconButton(
         icon: Icon(Icons.arrow_back_ios_rounded),
@@ -139,13 +142,13 @@ class ReiriScreen extends ConsumerWidget {
 
 /// Shows the current controller connection state in an app bar.
 class ConnectionStateIcon extends ConsumerWidget {
-  ConnectionStateIcon();
+  const ConnectionStateIcon({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(connectionProvider);
 
-    if (state == null || state['state'] != 'ready')
+    if (state == null || state['state'] != 'ready') {
       return Container(
         margin: EdgeInsets.all(4),
         child: ReiriIcons.icon(
@@ -154,27 +157,29 @@ class ConnectionStateIcon extends ConsumerWidget {
           color: app.color.alert,
         ),
       );
-    else
+    } else {
       return Container();
+    }
   }
 }
 
 /// Displays the current localized date and time.
 class DateTimeIndication extends ConsumerWidget {
-  DateTimeIndication();
+  const DateTimeIndication({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final time = ref.watch(controllerTimeProvider);
 
-    if (time != null)
+    if (time != null) {
       return Container(
         margin: EdgeInsets.all(4),
         child: Text(
           '${app.dateFormat().format(time)} ${app.timeFormat().format(time)}',
         ),
       );
-    else
+    } else {
       return Container();
+    }
   }
 }

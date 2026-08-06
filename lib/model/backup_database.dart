@@ -1,3 +1,5 @@
+// File purpose: Catalogs supported backup databases and their synchronization properties.
+
 /// Defines the identity and shared behavior of a database managed by backup
 /// and recovery.
 ///

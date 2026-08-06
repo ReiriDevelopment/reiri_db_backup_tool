@@ -1,3 +1,5 @@
+// File purpose: Reads and parses controller configuration records from QRC files.
+
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart';
 import 'package:reiri_db_backup_tool/lib/app_constant.dart';
@@ -8,6 +10,7 @@ import 'dart:convert';
 // this is used only for Windows version
 /// Parses controller connection details from a Reiri `.qrc` file.
 class QrcFileReader {
+  /// Decodes supported QRC files from Downloads and indexes controllers by MAC.
   Future<Map<String, Map<String, dynamic>>> getList() async {
     // get downloads folder path
     final dir = await getDownloadsDirectory();
@@ -19,7 +22,8 @@ class QrcFileReader {
         if (extension(file.path) == '.qrc') {
           final coded = File(file.path).readAsStringSync();
           final cdata = jsonDecode(utf8.decode(base64.decoder.convert(coded)));
-          if (SUPPORT_MODELS.contains(cdata['model'])) {
+          if (supportedModels.isEmpty ||
+              supportedModels.contains(cdata['model'])) {
             // convert format
             Map<String, dynamic> info = {};
             info['model'] = cdata['model'];

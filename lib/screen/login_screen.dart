@@ -1,3 +1,5 @@
+// File purpose: Presents controller login and validates submitted credentials.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_db_backup_tool/lib/app_constant.dart';
@@ -23,7 +25,7 @@ class LoginScreen extends ReiriScreen {
   Map<String, String?> loginFailReason = {};
   bool termsAndConditions = false;
 
-  LoginScreen() {
+  LoginScreen({super.key}) {
     _controller = app.selectedController;
     if (_controller == null && app.controllerList.isNotEmpty) {
       _controller = app.controllerList[app.controllerList.keys.first];
@@ -67,7 +69,9 @@ class LoginScreen extends ReiriScreen {
     );
 
     if (_controller == null) {
-      print('Controller is not selected. Back to controller selection screen.');
+      debugPrint(
+        'Controller is not selected. Back to controller selection screen.',
+      );
     }
 
     ref.listen(connectionProvider, (_, next) async {
@@ -76,7 +80,7 @@ class LoginScreen extends ReiriScreen {
         // store login user name and password to controller info
         app.setLoginAccount(_user ?? '', _passwd ?? '');
         hideLoading();
-        print('Open Home Screen'); // move to home screen
+        debugPrint('Open Home Screen'); // move to home screen
 
         final macaddr = _controller?['macaddr']?.toString();
         if (macaddr == null || macaddr.isEmpty) {
@@ -118,7 +122,7 @@ class LoginScreen extends ReiriScreen {
       }
       if (next?['state'] == 'disconnect') {
         hideLoading();
-        print('REASON OF DISCONNECT ${next?['reason']}');
+        debugPrint('REASON OF DISCONNECT ${next?['reason']}');
       }
       app.requestRefresh('login_screen');
     });
@@ -236,7 +240,7 @@ class LoginScreen extends ReiriScreen {
                     ),
                   ),
                   Text(
-                    '${app.word('version_prefix')}$APP_VER',
+                    '${app.word('version_prefix')}$appVersion',
                     style: TextStyle(color: app.color.inactive, fontSize: 11),
                   ),
                   Text(app.word(loginFailReason['reason'] ?? '')),
@@ -261,6 +265,7 @@ class LoginScreen extends ReiriScreen {
     );
   }
 
+  /// Validates the entered credentials and starts controller authentication.
   void tryLogin() {
     if (!termsAndConditions) return;
     showLoading();

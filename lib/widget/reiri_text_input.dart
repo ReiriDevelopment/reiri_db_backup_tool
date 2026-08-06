@@ -1,3 +1,5 @@
+// File purpose: Provides the application's reusable styled text input widget.
+
 import 'package:flutter/material.dart';
 import 'package:reiri_app_core/reiri_deco.dart';
 import 'package:std_widget/reiri_icons.dart';

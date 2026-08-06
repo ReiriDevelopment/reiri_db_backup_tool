@@ -1,3 +1,5 @@
+// File purpose: Displays the application's terms and conditions.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +7,8 @@ import 'package:reiri_app_core/reiri_app_core.dart';
 
 /// Displays the terms and conditions that must be accepted before login.
 class TermsConditionsScreen extends StatelessWidget {
+  const TermsConditionsScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

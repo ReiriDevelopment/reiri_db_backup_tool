@@ -1,3 +1,5 @@
+// File purpose: Renders and manages backup, recovery, and startup settings.
+
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -45,17 +47,21 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     _loadInstantFill();
   }
 
+  /// Loads the persisted off-peak recovery schedule into the time fields.
   Future<void> _loadRecoveryTime() async {
     final t = await loadRecoveryTime();
-    if (mounted)
+    if (mounted) {
       setState(() => _recoveryTime = (hour: t.hour, minute: t.minute));
+    }
   }
 
+  /// Loads whether short gaps should be recovered immediately.
   Future<void> _loadInstantFill() async {
     final v = await loadInstantFill();
     if (mounted) setState(() => _instantFill = v);
   }
 
+  /// Reads the Windows Run entry to reflect the actual startup setting.
   Future<void> _checkStartupRegistry() async {
     final result = await Process.run('reg', [
       'query',
@@ -66,6 +72,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     if (mounted) setState(() => _launchOnStartup = result.exitCode == 0);
   }
 
+  /// Adds or removes the current executable from the user's Windows Run key.
   Future<void> _setLaunchOnStartup(bool value) async {
     if (value) {
       final exePath = Platform.resolvedExecutable;
@@ -86,6 +93,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     await _checkStartupRegistry();
   }
 
+  /// Opens the time picker and persists the selected recovery schedule.
   Future<void> _pickRecoveryTime(BuildContext context) async {
     final current = _recoveryTime ?? kDefaultRecoveryTime;
     final picked = await showTimePicker(
@@ -101,6 +109,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
         .updateRecoveryTime(picked.hour, picked.minute);
   }
 
+  /// Selects a backup root and delegates migration to the home screen.
   Future<void> _pickPath() async {
     final path = await getDirectoryPath(
       confirmButtonText: app.word('select_backup_folder'),

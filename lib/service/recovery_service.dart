@@ -1,3 +1,5 @@
+// File purpose: Stages, fills, flushes, and reconciles recovery data across backup databases.
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -462,8 +464,9 @@ class RecoveryService {
     final dbFile = database.fileName;
     final mainPath = '$_mainDbDir\\$dbFile';
     final tempPath = '$_tempDbDir\\$dbFile';
-    if (!await File(tempPath).exists() || !await File(mainPath).exists())
+    if (!await File(tempPath).exists() || !await File(mainPath).exists()) {
       return;
+    }
     await _flushSingleDbWindow(mainPath, tempPath, database, from, to);
   });
 
@@ -500,6 +503,7 @@ class RecoveryService {
     }
   });
 
+  /// Retries TEMP deletion to tolerate short-lived Windows SQLite file locks.
   Future<bool> _deleteTempDbWithRetry() async {
     final tempDir = Directory(_tempDbDir);
     if (!await tempDir.exists()) return true;
@@ -604,16 +608,12 @@ class RecoveryService {
             if (hasWho) {
               final who = _normalizeHistoryField(row['who']);
               await txn.execute(
-                'INSERT INTO "$tableName" (date, type, com, id, data, who)'
-                        ' SELECT ?, ?, ?, ?, ?, ?' +
-                    notExists.replaceAll('{t}', tableName),
+                'INSERT INTO "$tableName" (date, type, com, id, data, who) SELECT ?, ?, ?, ?, ?, ?${notExists.replaceAll('{t}', tableName)}',
                 [date, type, com, id, data, who, date, type, com, id],
               );
             } else {
               await txn.execute(
-                'INSERT INTO "$tableName" (date, type, com, id, data)'
-                        ' SELECT ?, ?, ?, ?, ?' +
-                    notExists.replaceAll('{t}', tableName),
+                'INSERT INTO "$tableName" (date, type, com, id, data) SELECT ?, ?, ?, ?, ?${notExists.replaceAll('{t}', tableName)}',
                 [date, type, com, id, data, date, type, com, id],
               );
             }
@@ -646,6 +646,7 @@ class RecoveryService {
     return parts.join(' AND ');
   }
 
+  /// Moves the application DB handles from TEMP back to their MAIN files.
   Future<void> _switchToMainDbImpl() async {
     await app.setDbPath(_mainDbDir);
     await _openAllDbs();
@@ -661,6 +662,7 @@ class RecoveryService {
     () => _fillGapInMainDbImpl(database, records, deleteFrom: deleteFrom),
   );
 
+  /// Normalizes and inserts one controller recovery payload into its MAIN DB.
   Future<void> _fillGapInMainDbImpl(
     BackupDatabase database,
     List<dynamic> records, {
@@ -933,11 +935,11 @@ class RecoveryService {
     int depth = 0, start = 0;
     for (int i = 0; i < inner.length; i++) {
       final ch = inner[i];
-      if (ch == '{' || ch == '[')
+      if (ch == '{' || ch == '[') {
         depth++;
-      else if (ch == '}' || ch == ']')
+      } else if (ch == '}' || ch == ']') {
         depth--;
-      else if (ch == ',' && depth == 0) {
+      } else if (ch == ',' && depth == 0) {
         pairs.add(inner.substring(start, i).trim());
         start = i + 1;
       }
@@ -954,6 +956,7 @@ class RecoveryService {
     return '{${parts.join(',')}}';
   }
 
+  /// Converts a history value to valid JSON while preserving empty values.
   static String _jsonifyHistoryVal(String val) {
     if (val == 'null') return '""';
     if (val == 'true' || val == 'false') return val;
@@ -962,6 +965,7 @@ class RecoveryService {
     return '"$val"';
   }
 
+  /// Initializes every backup database handle at the active MAIN or TEMP root.
   Future<void> _openAllDbs() async {
     if (app.db == null) return;
     await app.db!.openHistoryDb();

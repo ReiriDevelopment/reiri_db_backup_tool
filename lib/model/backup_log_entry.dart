@@ -1,3 +1,5 @@
+// File purpose: Defines backup log entry data and JSON serialization.
+
 /// Identifies whether a log entry came from real-time or recovery backup.
 enum BackupLogType { realtime, recovery }
 

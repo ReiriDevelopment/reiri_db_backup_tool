@@ -1,3 +1,5 @@
+// File purpose: Displays detected backup gaps and recovery progress controls.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';

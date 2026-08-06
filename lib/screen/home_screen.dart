@@ -1,3 +1,5 @@
+// File purpose: Orchestrates the main dashboard, connection lifecycle, and backup services.
+
 import 'dart:async';
 import 'dart:io';
 
@@ -6,8 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
-import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
-
+import 'package:reiri_db_backup_tool/lib/recovery_time_window.dart';
 import 'package:reiri_db_backup_tool/provider/backup_log_provider.dart';
 import 'package:reiri_db_backup_tool/provider/recovery_provider.dart';
 import 'package:reiri_db_backup_tool/screen/initial_backup_screen.dart';
@@ -65,6 +66,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   bool get _isRecoveryFlushing => ref.read(recoveryProvider).isFlushing;
 
+  /// Detects gaps after connection and immediately fills short eligible gaps.
   Future<void> _runGapDetection() async {
     if (_isRecoveryFlushing) {
       _connectionSyncDeferredByRecovery = true;
@@ -75,10 +77,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (result == null || result.gaps.isEmpty || !mounted) return;
     await _loadDbStats(recordRealtimeEvents: false);
     final instantFill = await loadInstantFill();
-    if ((instantFill || result.autoFill) && mounted) {
+    final pendingPeriods = result.gapPeriods.isNotEmpty
+        ? result.gapPeriods
+        : result.gaps;
+    final shortGapAutoFill = shouldAutomaticallyRecoverShortGaps(
+      pendingPeriods.map((gap) => gap.duration),
+    );
+    if ((instantFill || result.autoFill || shortGapAutoFill) && mounted) {
+      final reason = result.autoFill
+          ? 'initial setup'
+          : instantFill
+          ? 'user preference'
+          : 'all pending gaps are under 1 minute';
       FileLogService().log(
-        '[Recovery] Auto-fill: starting immediately'
-        '${result.autoFill ? ' (initial setup)' : ' (user preference)'}',
+        '[Recovery] Auto-fill: starting after any required write-boundary wait '
+        '($reason)',
       );
       // Keep realtime stopped until recovery has finished reopening MAIN.
       // Starting db_backup_start while the flush owns app.db races its
@@ -87,6 +100,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  /// Starts real-time backup once local storage and controller transport are ready.
   void _tryStartRealtimeBackup() {
     final connection = ref.read(connectionProvider);
     final started = _realtimeBackup.tryStart(
@@ -125,7 +139,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  // Recover a Windows sleep gap before recording the next heartbeat.
+  /// Detects Windows sleep gaps before recording the next healthy heartbeat.
   Future<void> _handleRefreshTick() async {
     if (_refreshTickRunning) return;
     _refreshTickRunning = true;
@@ -154,7 +168,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
 
       await _loadDbStats();
-      _maybeAutoFlush();
+      await _maybeAutoFlush();
     } finally {
       _refreshTickRunning = false;
     }
@@ -169,6 +183,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  /// Runs the debounced network probe and applies any effective state change.
   Future<void> _checkNetworkReachable() async {
     final update = await _connectionMonitor.checkNow();
     if (!mounted) return;
@@ -180,7 +195,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   bool _isEffectivelyConnected() => _connectionMonitor.effectiveConnected;
 
-  // Apply the combined controller and OS reachability state once.
+  /// Applies the combined controller and OS reachability state once.
   Future<void> _syncEffectiveConnection() async {
     if (!mounted) return;
 
@@ -199,11 +214,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       FileLogService().log(
         '[Recovery] Processing deferred connection state after flush',
       );
+      // The monitor may already have consumed the reconnect transition while
+      // the flush was active. Re-run detection explicitly so the preserved
+      // disconnect timestamp becomes a concrete missing period.
+      if (_isEffectivelyConnected()) {
+        await _resumeConnectedServices();
+        return;
+      }
     }
 
     await _processConnectionUpdate(_connectionMonitor.sync());
   }
 
+  /// Routes effective connect/disconnect transitions into recovery and UI state.
   Future<void> _processConnectionUpdate(ConnectionMonitorUpdate update) async {
     if (!update.effectiveConnectionChanged) return;
     final effective = update.effectiveConnected;
@@ -215,16 +238,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     if (effective) {
       FileLogService().log('[Connection] Reconnected to controller');
-      await _runGapDetection();
-      _tryStartRealtimeBackup();
-    } else if (_realtimeBackup.isStarted) {
-      _realtimeBackup.handleDisconnected();
+      if (_isRecoveryFlushing) {
+        _connectionSyncDeferredByRecovery = true;
+        return;
+      }
+      await _resumeConnectedServices();
+    } else if (_realtimeBackup.isStarted || _recoveryService.hasActiveGap) {
+      if (_realtimeBackup.isStarted) {
+        _realtimeBackup.handleDisconnected();
+      }
       if (mounted) setState(() => _realtimeActive = false);
       FileLogService().log('[Connection] Disconnected from controller');
       await _recoveryService.onDisconnected();
     }
   }
 
+  /// Detects any completed outage before restarting recovery or live backup.
+  Future<void> _resumeConnectedServices() async {
+    await _runGapDetection();
+    await _maybeAutoFlush();
+    _tryStartRealtimeBackup();
+  }
+
+  /// Initializes controller storage, services, providers, and the first gap scan.
   Future<void> _init() async {
     _currentMac =
         app.selectedController?['macaddr']?.toString() ??
@@ -285,6 +321,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await _loadDbStats();
   }
 
+  /// Opens the active backup databases and records whether real-time can start.
   Future<bool> _openReiriDb() async {
     if (app.db == null) {
       FileLogService().log('[ReiriDb] app.db is null; skipping DB init');
@@ -295,6 +332,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return true;
   }
 
+  /// Refreshes dashboard DB status and optionally records verified live writes.
   Future<void> _loadDbStats({bool recordRealtimeEvents = true}) async {
     final root = _backupRootPath;
     if (root == null || _currentMac.isEmpty) return;
@@ -310,6 +348,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
+  /// Refreshes status without interpreting the refresh itself as a live write.
   void _handleManualRefresh() {
     if (_refreshCoolingDown) return;
     setState(() => _refreshCoolingDown = true);
@@ -320,14 +359,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
-  void _maybeAutoFlush() {
+  /// Starts scheduled recovery once its due time passes and no flush is active.
+  Future<bool> _maybeAutoFlush() async {
     final recovState = ref.read(recoveryProvider);
-    if (recovState.scheduledAt == null) return;
-    if (recovState.isFlushing) return;
-    if (DateTime.now().isBefore(recovState.scheduledAt!)) return;
-    ref.read(recoveryProvider.notifier).runFlushNow();
+    if (!scheduledRecoveryMayStart(
+      now: DateTime.now(),
+      scheduledAt: recovState.scheduledAt,
+      isFlushing: recovState.isFlushing,
+      controllerConnected: _isEffectivelyConnected(),
+    )) {
+      return false;
+    }
+    await ref.read(recoveryProvider.notifier).runFlushNow();
+    return true;
   }
 
+  /// Persists a new backup root and migrates the active controller data into it.
   Future<void> _setBackupPath(String path) async {
     final safeMac = _currentMac.isEmpty ? '' : macToSafeFolderName(_currentMac);
 
@@ -381,7 +428,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (mounted) _tryStartRealtimeBackup();
   }
 
-  // Copy the controller folder when the backup root changes.
+  /// Copies the controller folder when the backup root changes.
   Future<void> _migrateBackupData(
     String oldRoot,
     String newRoot,
@@ -397,6 +444,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  /// Recursively copies a directory tree while creating missing destinations.
   Future<void> _copyDirRecursive(Directory src, Directory dst) async {
     await for (final entity in src.list()) {
       final name = entity.path.contains('\\')
@@ -464,10 +512,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Refresh dashboard state after a flush.
     ref.listen<RecoveryState>(recoveryProvider, (prev, next) async {
-      if (prev != null &&
-          prev.isFlushing &&
-          !next.isFlushing &&
-          next.backupState == BackupState.realtimeMain) {
+      if (prev != null && prev.isFlushing && !next.isFlushing) {
         await _loadDbStats(recordRealtimeEvents: false);
         await _syncEffectiveConnection();
       }

@@ -1,3 +1,5 @@
+// File purpose: Defines initial-backup files and persists backup-related preferences.
+
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:reiri_db_backup_tool/model/backup_database.dart';
 

@@ -1,3 +1,5 @@
+// File purpose: Combines controller connection state with network reachability checks.
+
 import 'dart:io';
 
 import 'package:reiri_app_core/reiri_app_core.dart';
@@ -32,6 +34,7 @@ class ConnectionMonitorService {
 
   bool get effectiveConnected => isControllerReady() && _networkReachable;
 
+  /// Probes reachability with failure debouncing, then returns effective state.
   Future<ConnectionMonitorUpdate> checkNow() async {
     final reachable = await _probeNetworkReachable();
     if (reachable) {
@@ -57,6 +60,8 @@ class ConnectionMonitorService {
     return sync();
   }
 
+  /// Reconciles WebSocket readiness with the last reachability result and
+  /// reports whether the effective connection changed since the prior sync.
   ConnectionMonitorUpdate sync() {
     final effective = effectiveConnected;
     final changed = effective != _lastEffectiveConnected;
@@ -68,10 +73,12 @@ class ConnectionMonitorService {
     );
   }
 
+  /// Resets transition tracking after a confirmed disconnection.
   void markDisconnected() {
     _lastEffectiveConnected = false;
   }
 
+  /// Checks for an IPv4 interface and, for local controllers, their TCP port.
   Future<bool> _probeNetworkReachable() async {
     try {
       final interfaces = await NetworkInterface.list(

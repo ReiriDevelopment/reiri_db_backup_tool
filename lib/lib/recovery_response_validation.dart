@@ -1,3 +1,5 @@
+// File purpose: Validates controller recovery responses before database insertion.
+
 import 'package:reiri_db_backup_tool/model/backup_database.dart';
 
 /// Signals a malformed response that must leave the gap and TEMP DB intact.

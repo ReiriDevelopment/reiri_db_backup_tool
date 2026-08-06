@@ -1,3 +1,5 @@
+// File purpose: Scans controller QR codes and handles camera permission feedback.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_code_scanner_plus/qr_code_scanner_plus.dart';
@@ -9,7 +11,7 @@ import 'dart:convert';
 // Show QR code scan screen and get controller info from QR code
 /// Scans controller QR codes using the device camera.
 class QrScannerView extends ConsumerWidget {
-  QrScannerView();
+  QrScannerView({super.key});
 
   final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
   QRViewController? _qrController;
@@ -37,7 +39,8 @@ class QrScannerView extends ConsumerWidget {
                 utf8.decode(base64.decoder.convert(scanData.code!)),
               );
               final list = <String, Map<String, dynamic>>{};
-              if (SUPPORT_MODELS.contains(cdata['model'])) {
+              if (supportedModels.isEmpty ||
+                  supportedModels.contains(cdata['model'])) {
                 final info = {
                   'model': cdata['model'],
                   'version': cdata['version'],
@@ -51,11 +54,11 @@ class QrScannerView extends ConsumerWidget {
                 final mac = info['macaddr'];
 
                 if (mac != null) {
-                  print('selectedController: $mac');
+                  debugPrint('selectedController: $mac');
 
                   list[mac] = info;
 
-                  print('_controllerProvider: $list');
+                  debugPrint('_controllerProvider: $list');
 
                   _qrController?.stopCamera();
                 }

@@ -1,7 +1,7 @@
+// File purpose: Hosts the controller QR-code registration web flow.
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:reiri_app_core/app_interface.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'dart:async';
@@ -31,6 +31,8 @@ class _QrWebViewState extends ConsumerState<QrWebView> {
     initView();
   }
 
+  /// Initializes the Windows web view, tracks QR completion, and loads the
+  /// camera or gallery activation page selected by the widget.
   Future<void> initView() async {
     if (!Platform.isWindows) return;
 

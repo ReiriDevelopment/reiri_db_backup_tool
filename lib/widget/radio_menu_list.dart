@@ -1,3 +1,5 @@
+// File purpose: Provides a reusable radio-button menu list widget.
+
 import 'package:flutter/material.dart';
 import 'package:std_widget/selector.dart';
 

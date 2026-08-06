@@ -1,3 +1,5 @@
+// File purpose: Calculates per-database synchronization status and verified progress.
+
 import 'dart:io';
 
 import 'package:reiri_app_core/reiri_app_core.dart';
@@ -77,6 +79,8 @@ class DatabaseStatusService {
       )
       .toList(growable: false);
 
+  /// Inspects MAIN and active TEMP files, derives each dashboard status, and
+  /// emits real-time log entries only when database content actually advances.
   Future<DatabaseStatusSnapshot?> load({
     required String backupRootPath,
     required String macAddress,
@@ -174,6 +178,7 @@ class DatabaseStatusService {
     }
   }
 
+  /// Reads the latest database timestamp through the matching core DB helper.
   Future<int?> _readLatestRecord(BackupDatabase database) async {
     if (app.db == null) return null;
     return switch (database) {
@@ -185,6 +190,7 @@ class DatabaseStatusService {
     };
   }
 
+  /// Reads history's highest row ID for its latest month to detect same-minute events.
   Future<int?> _readLatestHistoryRowId(int latestDate) async {
     if (app.db == null || latestDate <= 0) return null;
     const months = [
@@ -211,6 +217,7 @@ class DatabaseStatusService {
     return rows.first['max_rowid'] as int?;
   }
 
+  /// Initializes progress markers without generating a synthetic backup event.
   Future<void> _seedLatestProgress(BackupDatabase database) async {
     final filename = database.fileName;
     try {
@@ -231,6 +238,7 @@ class DatabaseStatusService {
     }
   }
 
+  /// Appends a real-time success entry when timestamp or history row ID advanced.
   Future<void> _appendVerifiedRealtimeEvent(
     BackupDatabase database,
     List<BackupLogEntry> entries,

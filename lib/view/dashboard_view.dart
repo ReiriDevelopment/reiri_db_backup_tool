@@ -1,3 +1,5 @@
+// File purpose: Presents controller, database, and real-time backup status summaries.
+
 import 'package:flutter/material.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 import 'package:reiri_db_backup_tool/lib/date_time_utils.dart';

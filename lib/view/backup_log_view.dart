@@ -1,3 +1,5 @@
+// File purpose: Displays, filters, paginates, and exports backup log entries.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -41,6 +43,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
   String? _dbFilter;
   int _shownCount = _kPageSize;
 
+  /// Applies type, result, date-range, and text filters to the full log list.
   List<BackupLogEntry> _applyFilters(List<BackupLogEntry> entries) {
     return entries
         .where((e) {
@@ -57,6 +60,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
 
   void _resetShown() => _shownCount = _kPageSize;
 
+  /// Writes the currently filtered entries to a user-selected CSV file.
   Future<void> _exportCsv(List<BackupLogEntry> entries) async {
     final location = await getSaveLocation(
       suggestedName: 'backup_log.csv',
@@ -99,6 +103,7 @@ class _BackupLogViewState extends ConsumerState<BackupLogView> {
     await File(savePath).writeAsString(buf.toString());
   }
 
+  /// Writes the currently filtered entries to a user-selected JSON file.
   Future<void> _exportJson(List<BackupLogEntry> entries) async {
     final location = await getSaveLocation(
       suggestedName: 'backup_log.json',

@@ -1,3 +1,5 @@
+// File purpose: Defines persisted backup metadata, gap ranges, and flush states.
+
 /// A detected gap for a single DB file.
 class GapRange {
   final String dbFile;

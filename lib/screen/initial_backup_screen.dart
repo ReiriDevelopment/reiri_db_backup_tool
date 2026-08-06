@@ -1,3 +1,5 @@
+// File purpose: Guides users through selecting and completing an initial backup method.
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,13 +17,14 @@ import 'reiri_screen.dart';
 
 /// Guides the user through the required first backup by FTP or local import.
 class InitialBackupScreen extends ReiriScreen {
-  InitialBackupScreen({this.initialMac});
+  InitialBackupScreen({super.key, this.initialMac});
 
   final String? initialMac;
 
   String selectedMethod = 'ftp';
   bool showingView = false;
 
+  /// Checks persisted setup state to decide whether this controller needs onboarding.
   static Future<bool> needsInitialBackup(String? macaddr) async {
     if (macaddr == null || macaddr.isEmpty) return true;
 
@@ -96,25 +99,37 @@ class InitialBackupScreen extends ReiriScreen {
             children: [
               _buildHeader(context, macaddr),
               const SizedBox(height: 28),
-              _buildMethodCard(
-                methodValue: 'ftp',
-                icon: Icons.cloud_download_outlined,
-                title: app.word('load_via_ftp'),
-                description: app.word('load_via_ftp_description'),
-                onTap: () {
-                  selectedMethod = 'ftp';
+              RadioGroup<String>(
+                groupValue: selectedMethod,
+                onChanged: (value) {
+                  if (value == null) return;
+                  selectedMethod = value;
                   app.requestRefresh('initial_backup_screen');
                 },
-              ),
-              _buildMethodCard(
-                methodValue: 'local',
-                icon: Icons.sd_storage_outlined,
-                title: app.word('import_local_db_files'),
-                description: app.word('import_local_db_description'),
-                onTap: () {
-                  selectedMethod = 'local';
-                  app.requestRefresh('initial_backup_screen');
-                },
+                child: Column(
+                  children: [
+                    _buildMethodCard(
+                      methodValue: 'ftp',
+                      icon: Icons.cloud_download_outlined,
+                      title: app.word('load_via_ftp'),
+                      description: app.word('load_via_ftp_description'),
+                      onTap: () {
+                        selectedMethod = 'ftp';
+                        app.requestRefresh('initial_backup_screen');
+                      },
+                    ),
+                    _buildMethodCard(
+                      methodValue: 'local',
+                      icon: Icons.sd_storage_outlined,
+                      title: app.word('import_local_db_files'),
+                      description: app.word('import_local_db_description'),
+                      onTap: () {
+                        selectedMethod = 'local';
+                        app.requestRefresh('initial_backup_screen');
+                      },
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               if (macaddr == null || macaddr.isEmpty)
@@ -407,8 +422,6 @@ class InitialBackupScreen extends ReiriScreen {
           children: [
             Radio<String>(
               value: methodValue,
-              groupValue: selectedMethod,
-              onChanged: (_) => onTap(),
               activeColor: app.color.active,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),

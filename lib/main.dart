@@ -1,3 +1,5 @@
+// File purpose: Boots the desktop application and defines its root window and splash flow.
+
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
@@ -14,6 +16,8 @@ import 'package:reiri_db_backup_tool/service/tray_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'screen/language_selection_screen.dart';
 
+/// Initializes guarded error handling, the desktop window, HTTPS overrides,
+/// and the Riverpod application tree.
 void main() async {
   // Keep unattended backup alive while logging uncaught async failures.
   runZonedGuarded(
@@ -61,8 +65,8 @@ void main() async {
 /// process survives and the failure can be diagnosed after the fact.
 void _logCrash(String source, Object error, StackTrace? stack) {
   final msg = '[Crash][$source] $error';
-  print(msg);
-  if (stack != null) print(stack);
+  debugPrint(msg);
+  if (stack != null) debugPrint(stack.toString());
   // Write only the error message to the file — stack traces are 20+ lines each
   // and inflate the log file significantly. Full traces remain on stdout above.
   FileLogService().log(msg);
@@ -102,6 +106,7 @@ class _AppState extends ConsumerState<App> with WindowListener {
     super.dispose();
   }
 
+  /// Restores and focuses the window from a tray action.
   Future<void> _restoreWindow() async {
     await windowManager.show();
     await windowManager.focus();
@@ -111,6 +116,7 @@ class _AppState extends ConsumerState<App> with WindowListener {
   /// and backing up — before that there is nothing running worth protecting.
   bool get _isLoggedIn => ref.read(connectionProvider)?['state'] == 'ready';
 
+  /// Exits immediately before login or asks how to handle an active backup.
   void _onExitFromTray() {
     if (!_isLoggedIn) {
       windowManager.destroy();
@@ -124,6 +130,7 @@ class _AppState extends ConsumerState<App> with WindowListener {
     _showCloseDialog(ctx);
   }
 
+  /// Intercepts the window close button so active backup can continue in tray.
   @override
   void onWindowClose() {
     if (!_isLoggedIn) {
@@ -138,6 +145,7 @@ class _AppState extends ConsumerState<App> with WindowListener {
     _showCloseDialog(ctx);
   }
 
+  /// Offers cancellation, minimizing to tray, or explicitly stopping backup.
   void _showCloseDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -189,7 +197,7 @@ class _AppState extends ConsumerState<App> with WindowListener {
       app.lightMode();
 
     final themeMode = ref.watch(stringDataProvider('theme_mode'));
-    print('MODE $themeMode');
+    debugPrint('MODE $themeMode');
     ThemeMode mode = switch (themeMode) {
       'system' => ThemeMode.system,
       'light' => ThemeMode.light,
@@ -271,6 +279,8 @@ class _AppState extends ConsumerState<App> with WindowListener {
 
 /// Initializes the app and routes the user to the appropriate first screen.
 class SplashScreen extends ConsumerWidget {
+  const SplashScreen({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.listen(mapDataProvider('app_init'), (_, state) {
@@ -278,7 +288,7 @@ class SplashScreen extends ConsumerWidget {
     });
 
     ref.listen(connectionProvider, (_, next) async {
-      print('state ${next?['state']}');
+      debugPrint('state ${next?['state']}');
       if (next?['state'] == 'ready') {
         Map<String, String> loginAccount = app.loginAccount();
         app.setLoginAccount(
@@ -295,6 +305,7 @@ class SplashScreen extends ConsumerWidget {
         } else {
           final showInitialBackup =
               await InitialBackupScreen.needsInitialBackup(macaddr);
+          if (!context.mounted) return;
 
           if (showInitialBackup) {
             Navigator.pushReplacement(
@@ -315,13 +326,13 @@ class SplashScreen extends ConsumerWidget {
           context,
           MaterialPageRoute(builder: (context) => LoginScreen()),
         );
-        print('REASON OF DISCONNECT ${next?['reason']}');
+        debugPrint('REASON OF DISCONNECT ${next?['reason']}');
       }
       app.requestRefresh('init_screen');
     });
 
     ref.listen(mapDataProvider('app_init'), (_, state) {
-      print(
+      debugPrint(
         'INIT STATUS lang=${state!['LANG']} ctrl=${state['CTRL']} autologin=${state['AUTOLOGIN']}',
       );
       if (state['LANG'] == null) {
@@ -335,7 +346,7 @@ class SplashScreen extends ConsumerWidget {
           MaterialPageRoute(builder: (context) => ControllerSelectionScreen()),
         );
       } else if (state['AUTOLOGIN'] == true) {
-        print(
+        debugPrint(
           '[SplashScreen] auto-login: ${app.selectedController?['macaddr']}',
         );
         final loginAccount = app.loginAccount();
@@ -382,6 +393,7 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
 
 /// Accepts controller self-signed certificates for local HTTPS communication.
 class MyHttpOverrides extends HttpOverrides {
+  /// Creates a client that trusts self-signed certificates from local controllers.
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)

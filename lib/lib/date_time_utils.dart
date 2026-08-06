@@ -1,3 +1,5 @@
+// File purpose: Converts and formats controller database date-time values.
+
 import 'package:reiri_app_core/reiri_app_core.dart';
 
 /// Converts the 12-digit DB date integer `YYYYMMDDHHmm` to a [DateTime].

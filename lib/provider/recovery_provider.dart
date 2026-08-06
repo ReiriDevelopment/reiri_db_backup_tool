@@ -1,7 +1,10 @@
+// File purpose: Exposes recovery state and commands to the Riverpod UI layer.
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/reiri_app_core.dart';
 
 import 'package:reiri_db_backup_tool/lib/initial_backup_constants.dart';
+import 'package:reiri_db_backup_tool/lib/recovery_time_window.dart';
 import 'package:reiri_db_backup_tool/model/backup_metadata.dart';
 import 'package:reiri_db_backup_tool/provider/backup_log_provider.dart';
 import 'package:reiri_db_backup_tool/service/file_log_service.dart';
@@ -71,29 +74,41 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
   @override
   RecoveryState build() => const RecoveryState();
 
+  /// Updates the configured off-peak time used for newly scheduled recovery.
   void setRecoveryTime(int hour, int minute) {
     _recoveryHour = hour;
     _recoveryMinute = minute;
   }
 
+  /// Binds the active service and creates the coordinator used by UI actions.
   void attach(RecoveryService service) {
     _service = service;
     _coordinator = RecoveryCoordinator(ref: ref, service: service);
     syncFromService();
   }
 
+  /// Rebuilds UI state from persisted service metadata, the recovery source of truth.
   void syncFromService() {
     final metadata = _service?.metadata;
     if (metadata == null) return;
+    final scheduledAt = pendingRecoverySchedule(
+      hasPendingGaps: metadata.detectedGaps.isNotEmpty,
+      existingSchedule: state.scheduledAt,
+      nextSchedule: _nextOffPeak,
+    );
     state = RecoveryState(
       gaps: metadata.detectedGaps,
       gapPeriods: metadata.gapPeriods,
       backupState: metadata.backupState,
       flushStatus: metadata.flushStatus,
-      scheduledAt: metadata.detectedGaps.isNotEmpty ? _nextOffPeak() : null,
+      isScanning: state.isScanning,
+      isFlushing: state.isFlushing,
+      scheduledAt: scheduledAt,
+      flushStep: state.flushStep,
     );
   }
 
+  /// Briefly exposes scan progress while refreshing the latest persisted gaps.
   Future<void> scanForGaps() async {
     state = state.copyWith(isScanning: true);
     await Future.wait([
@@ -103,17 +118,24 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
     state = state.copyWith(isScanning: false);
   }
 
+  /// Projects newly detected gaps into a pending TEMP-backed recovery state.
   void onGapsDetected(List<GapRange> gaps) {
     final metadata = _service?.metadata;
+    final detectedGaps = metadata?.detectedGaps ?? gaps;
     state = RecoveryState(
-      gaps: metadata?.detectedGaps ?? gaps,
+      gaps: detectedGaps,
       gapPeriods: metadata?.gapPeriods ?? gaps,
       backupState: BackupState.realtimeTemp,
       flushStatus: FlushStatus.pending,
-      scheduledAt: gaps.isNotEmpty ? _nextOffPeak() : null,
+      scheduledAt: pendingRecoverySchedule(
+        hasPendingGaps: detectedGaps.isNotEmpty,
+        existingSchedule: state.scheduledAt,
+        nextSchedule: _nextOffPeak,
+      ),
     );
   }
 
+  /// Reschedules pending recovery after the user changes the off-peak time.
   void updateRecoveryTime(int hour, int minute) {
     _recoveryHour = hour;
     _recoveryMinute = minute;
@@ -123,6 +145,7 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
     );
   }
 
+  /// Runs coordinator detection and synchronizes its result into Riverpod state.
   Future<RecoveryDetectionResult?> detectGaps() async {
     final result = await _coordinator?.detectGaps();
     if (result != null && result.gaps.isNotEmpty) {
@@ -133,6 +156,8 @@ class RecoveryNotifier extends Notifier<RecoveryState> {
     return result;
   }
 
+  /// Starts one guarded interleaved flush and records its successful log entries.
+  /// Failures restore the UI from retryable metadata maintained by the service.
   Future<void> runFlushNow() async {
     final coordinator = _coordinator;
     final service = _service;

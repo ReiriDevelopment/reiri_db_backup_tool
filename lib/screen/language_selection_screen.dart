@@ -1,3 +1,5 @@
+// File purpose: Lets the user select and persist the application language.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_db_backup_tool/screen/controller_selection_screen.dart';
@@ -7,10 +9,10 @@ import 'package:reiri_app_core/reiri_app_core.dart';
 
 /// Lets the user choose the application language during setup.
 class LanguageSelectionScreen extends ConsumerWidget {
-  LanguageSelectionScreen() {
-    app.selectableLang.forEach((lang) {
+  LanguageSelectionScreen({super.key}) {
+    for (var lang in app.selectableLang) {
       selectable[lang] = SelectorItem(label: app.word(lang));
-    });
+    }
   }
   Map<String, SelectorItem> selectable = {};
   String selectedLang = 'EN';

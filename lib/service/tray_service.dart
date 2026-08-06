@@ -1,3 +1,5 @@
+// File purpose: Manages the Windows tray icon, status text, and tray menu actions.
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +19,7 @@ class TrayService with TrayListener {
   /// Called when the user chooses Exit from the tray context menu.
   VoidCallback? onExit;
 
+  /// Registers tray callbacks and creates the icon, tooltip, and localized menu once.
   Future<void> init({
     required VoidCallback onOpenApp,
     required VoidCallback onExit,
@@ -65,6 +68,7 @@ class TrayService with TrayListener {
     await trayManager.setToolTip(tooltip);
   }
 
+  /// Recreates the context menu so labels follow the current application locale.
   Future<void> _rebuildContextMenu() async {
     final menu = Menu(
       items: [
@@ -76,6 +80,7 @@ class TrayService with TrayListener {
     await trayManager.setContextMenu(menu);
   }
 
+  /// Resolves a localized tray label with a startup-safe English fallback.
   String _word(String key, String fallback) {
     try {
       final value = app.word(key);

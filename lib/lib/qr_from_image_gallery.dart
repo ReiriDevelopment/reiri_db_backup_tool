@@ -1,3 +1,5 @@
+// File purpose: Selects an image and extracts QR-code controller data from it.
+
 /*==============================================================================
   Created: 21/08/2024, Jared Ong
   Purpose:
@@ -7,6 +9,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:reiri_db_backup_tool/lib/app_constant.dart';
 import 'package:scan/scan.dart';
@@ -15,7 +18,7 @@ import 'package:scan/scan.dart';
 class QrFromImageGallery {
   static final QrFromImageGallery _instance = QrFromImageGallery._internal();
   factory QrFromImageGallery() => _instance;
-  QrFromImageGallery._internal() {}
+  QrFromImageGallery._internal();
 
   File? _image;
   final picker = ImagePicker();
@@ -34,7 +37,7 @@ class QrFromImageGallery {
     if (res == null) return {};
 
     try {
-      final cdata = jsonDecode(utf8.decode(base64.decoder.convert(res!)));
+      final cdata = jsonDecode(utf8.decode(base64.decoder.convert(res)));
       // if scan data is target controller's
       // convert format
       final Map<String, Map<String, dynamic>> list = {};
@@ -48,16 +51,16 @@ class QrFromImageGallery {
       info['url'] = cdata['ssc_url'];
 
       //If supportedModels is empty means it supports all models
-      if (SUPPORT_MODELS.isNotEmpty) {
-        if (!SUPPORT_MODELS.contains(info['model'])) return {};
+      if (supportedModels.isNotEmpty) {
+        if (!supportedModels.contains(info['model'])) return {};
       }
 
       if (info['macaddr'] != null) {
         list[info['macaddr']] = info;
         return info;
       }
-    } catch (e, st) {
-      print('Error with QR Image Gallery: $e');
+    } catch (e) {
+      debugPrint('Error with QR Image Gallery: $e');
       return {};
     }
 

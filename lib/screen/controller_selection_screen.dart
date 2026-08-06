@@ -1,3 +1,5 @@
+// File purpose: Supports controller discovery, registration, and selection.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_db_backup_tool/lib/app_constant.dart';
@@ -12,6 +14,8 @@ class ControllerSelectionScreen extends ReiriScreen {
   final foundControllers = mapDataProvider('controller');
 
   Map<String, dynamic> selectedCtlr = {};
+
+  ControllerSelectionScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -92,7 +96,7 @@ class ControllerSelectionScreen extends ReiriScreen {
       onPressed: () async {
         showLoading();
 
-        final list = await FindController(SUPPORT_MODELS).getList(1500);
+        final list = await FindController(supportedModels).getList(1500);
 
         ref.read(mapDataProvider('controller').notifier).set(list);
 
@@ -113,13 +117,15 @@ class ControllerSelectionScreen extends ReiriScreen {
         children: [
           TextButton(
             onPressed: () async {
-              if (await app.registerController(selectedCtlr)) {
+              final registered = await app.registerController(selectedCtlr);
+              if (!context.mounted) return;
+              if (registered) {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => LoginScreen()),
                 );
               } else {
-                print('Controller registration failed');
+                debugPrint('Controller registration failed');
               }
             },
             child: Text(app.word('register_controller')),

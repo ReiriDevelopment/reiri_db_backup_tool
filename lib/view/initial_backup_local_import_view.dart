@@ -1,3 +1,5 @@
+// File purpose: Imports an initial controller backup from a local folder.
+
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -54,6 +56,7 @@ class _InitialBackupLocalImportViewState
 
   String get _localDbRootPath => Directory.current.path;
 
+  /// Selects the controller export folder and immediately probes its databases.
   Future<void> _pickSourcePath() async {
     final path = await getDirectoryPath();
     if (path == null || path.isEmpty) return;
@@ -66,6 +69,7 @@ class _InitialBackupLocalImportViewState
     await _scanFolder();
   }
 
+  /// Selects the root folder where imported controller data will be stored.
   Future<void> _pickBackupPath() async {
     final path = await getDirectoryPath();
     if (path == null || path.isEmpty) return;
@@ -75,6 +79,7 @@ class _InitialBackupLocalImportViewState
     });
   }
 
+  /// Probes candidate DB files to show availability and latest-record status.
   Future<void> _scanFolder() async {
     final src = _sourcePath;
     if (src == null || src.isEmpty) return;
@@ -100,6 +105,7 @@ class _InitialBackupLocalImportViewState
     });
   }
 
+  /// Clears the app-owned staging directory before a new import copy begins.
   void _clearLocalDirectory(Directory dir) {
     if (!dir.existsSync()) return;
     for (final entry in dir.listSync()) {
@@ -113,6 +119,7 @@ class _InitialBackupLocalImportViewState
     }
   }
 
+  /// Copies supported source files into the local staging and backup folders.
   Future<void> _copyDbFiles({
     required String sourceDbDir,
     required String destDbDir,
@@ -145,6 +152,7 @@ class _InitialBackupLocalImportViewState
     }
   }
 
+  /// Validates selections, stages the source data, and finalizes initial-backup metadata.
   Future<void> _startImport() async {
     if (!_canImport) return;
 
@@ -192,10 +200,11 @@ class _InitialBackupLocalImportViewState
         SnackBar(content: Text('${app.word('import_failed')}: $e')),
       );
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isImporting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
     }
   }
 

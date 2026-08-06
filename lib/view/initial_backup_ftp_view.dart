@@ -1,3 +1,5 @@
+// File purpose: Downloads an initial controller backup over FTP.
+
 import 'dart:io';
 
 import 'package:ftpconnect/ftpconnect.dart';
@@ -44,6 +46,7 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
 
   String get _dbFolderName => kInitialBackupDbFolderName;
 
+  /// Lets the user choose the root that will contain the controller backup.
   Future<void> _pickBackupPath() async {
     final path = await getDirectoryPath();
     if (path == null || path.isEmpty) return;
@@ -55,6 +58,8 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
     });
   }
 
+  /// Connects to the controller, downloads every required backup file, and
+  /// reports completion only after metadata and destination paths are saved.
   Future<void> _startDownload() async {
     if (!_canStart) return;
     if (widget.controllerIp.isEmpty) {
@@ -148,11 +153,12 @@ class _InitialBackupFtpViewState extends State<InitialBackupFtpView> {
       try {
         await ftp?.disconnect();
       } catch (_) {}
-      if (!mounted) return;
-      setState(() {
-        _isDownloading = false;
-        _currentFile = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _currentFile = null;
+        });
+      }
     }
   }
 

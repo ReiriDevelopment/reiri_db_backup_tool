@@ -1,3 +1,5 @@
+// File purpose: Persists backup health metadata and derives missing-data gaps.
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -35,6 +37,7 @@ class BackupMetadataService {
     }
   }
 
+  /// Reads persisted metadata, falling back to an empty state when absent or invalid.
   Future<BackupMetadata> _load() async {
     if (_filePath == null) return BackupMetadata.empty();
     final file = File(_filePath!);
@@ -130,6 +133,7 @@ class BackupMetadataService {
     return merged;
   }
 
+  /// Derives per-database gaps from the last healthy or disconnected boundary.
   List<GapRange> _computeGaps(DateTime tConnect) {
     // Fall back through the last healthy connection; no timestamp means first run.
     final gapStart =
@@ -228,6 +232,7 @@ class BackupMetadataService {
     await save(updated);
   }
 
+  /// Clears completed recovery work and records that live writes are back on MAIN.
   Future<void> markFlushCompleted() async {
     final updated = _current.copyWith(
       flushStatus: FlushStatus.completed,

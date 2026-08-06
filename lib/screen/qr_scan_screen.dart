@@ -1,3 +1,5 @@
+// File purpose: Wraps QR scanning in the standard application screen layout.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:reiri_app_core/app_interface.dart';
@@ -10,7 +12,7 @@ import 'dart:io';
 
 /// Provides camera, image, and file options for importing controller QR data.
 class QrScanScreen extends ConsumerWidget {
-  QrScanScreen({this.fromGallery = false}) {}
+  QrScanScreen({super.key, this.fromGallery = false});
   int tabIndex = 0;
   bool? fromGallery;
 
@@ -34,6 +36,7 @@ class QrScanScreen extends ConsumerWidget {
           onPressed: () async {
             Map<String, dynamic> selected =
                 await QrFromImageGallery.getImageFromGallery();
+            if (!context.mounted) return;
             if (selected.isNotEmpty && selected['macaddr'] != null) {
               // ref.read(rsys.getProvider('ctrl_sel').notifier).state = selected['macaddr'];
               Map<String, Map<String, dynamic>> searchedcontrollers = {};
@@ -47,7 +50,7 @@ class QrScanScreen extends ConsumerWidget {
                 'url': selected['url'],
               };
 
-              print('search result: $searchedcontrollers');
+              debugPrint('search result: $searchedcontrollers');
               Navigator.pop(context, searchedcontrollers);
             }
           },
@@ -64,8 +67,9 @@ class QrScanScreen extends ConsumerWidget {
           // close web view
           // read *.qrc file to get controller information
           readList = await QrcFileReader().getList();
+          if (!context.mounted) return;
           // _provider = readList;
-          print('QR code data: $readList');
+          debugPrint('QR code data: $readList');
         }
         Navigator.pop(context, readList);
       },

@@ -1,3 +1,5 @@
+// File purpose: Determines whether a database's latest-record marker has advanced.
+
 /// Whether the database contains a record event newer than the last observed
 /// progress marker.
 ///

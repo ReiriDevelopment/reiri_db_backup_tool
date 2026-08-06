@@ -130,3 +130,6 @@ recovery_schedule_time,Settings item title and time-picker heading,Recovery Sche
 immediate_mode_active,Settings recovery-schedule disabled state,Not used - immediate mode is active
 recovery_schedule_description,Settings recovery-schedule description,Daily time to merge gap recovery data into backup
 select_backup_folder,Native folder-picker confirmation action,Select Backup Folder
+keep_me_login,Login option,Keep me logged in
+register_new_controller,Login navigation action,Register a new controller
+scan,QR scanning action,Scan

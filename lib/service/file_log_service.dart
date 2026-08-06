@@ -1,4 +1,8 @@
+// File purpose: Writes timestamped diagnostic messages to per-controller log files.
+
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 
 /// Appends timestamped lines to the active controller's daily log.
 class FileLogService {
@@ -28,7 +32,7 @@ class FileLogService {
 
   /// Writes [message] to the log file and the debug console.
   void log(String message) {
-    print(message);
+    debugPrint(message);
     _write(message);
   }
 

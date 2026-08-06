@@ -1,3 +1,5 @@
+// File purpose: Coordinates gap detection and interleaves recovery with live controller writes.
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -77,6 +79,8 @@ class RecoveryCoordinator {
 
   RecoveryCoordinator({required this.ref, required this.service});
 
+  /// Stages live writes, refreshes persisted gap metadata, and returns the
+  /// complete recovery workload unless another detection is already running.
   Future<RecoveryDetectionResult?> detectGaps() async {
     if (_detectingGaps) return null;
     _detectingGaps = true;
@@ -108,6 +112,11 @@ class RecoveryCoordinator {
     }
   }
 
+  /// Recovers gaps database-by-database while flushing staged live rows between
+  /// periods, then catches up the switchover window and resumes normal writes.
+  ///
+  /// [onStep] receives user-facing progress text. Any failure reopens the
+  /// appropriate write target and leaves recovery metadata retryable.
   Future<RecoveryFlushResult> runInterleavedFlush({
     required List<GapRange> gaps,
     required List<GapRange> gapPeriods,
@@ -137,7 +146,7 @@ class RecoveryCoordinator {
         final periods = entry.value;
         for (var index = 0; index < periods.length; index++) {
           final period = periods[index];
-          await _waitForInitialTrendBoundary(database, period);
+          await _waitForTrendBoundary(database, period);
           onStep(
             '${app.word('fetching_from_controller')}: $label'
             '${periods.length > 1 ? ' (${app.word('gap_progress')} ${index + 1}/${periods.length})' : ''}'
@@ -192,6 +201,7 @@ class RecoveryCoordinator {
     }
   }
 
+  /// Converts successful per-database recovery summaries into persisted logs.
   List<BackupLogEntry> _buildLogEntries(
     Map<BackupDatabase, _GapSummary> summaries,
   ) {
@@ -210,6 +220,8 @@ class RecoveryCoordinator {
     }).toList();
   }
 
+  /// Requests records that may have arrived while live DB handles were closed.
+  /// Very short switchovers are ignored because no five-minute write is at risk.
   Future<void> _catchUpSuspendWindow(
     DateTime from,
     DateTime to,
@@ -238,11 +250,12 @@ class RecoveryCoordinator {
     }
   }
 
-  Future<void> _waitForInitialTrendBoundary(
+  /// Delays trend recovery until the controller has finished its latest batch.
+  Future<void> _waitForTrendBoundary(
     BackupDatabase database,
     GapRange period,
   ) async {
-    if (!service.metadata.autoFill || database != BackupDatabase.trend) return;
+    if (database != BackupDatabase.trend) return;
     final interval = database.interval;
     if (interval == null) return;
 
@@ -259,6 +272,8 @@ class RecoveryCoordinator {
     await Future<void>.delayed(wait);
   }
 
+  /// Requests one database period, validates the controller payload, writes it
+  /// to MAIN, and summarizes the received records for logging and aggregation.
   Future<_GapSummary> _fillSinglePeriodFromController(
     BackupDatabase database,
     GapRange period,
